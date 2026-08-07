@@ -1,20 +1,11 @@
-# Entorno virtual y Python
 venv/
 __pycache__/
 *.pyc
-
-# Archivos de configuración con API Key e historial local
+.env
+data/
 config.json
 history.json
 trash.json
-
-# Audios generados localmente
-static/audio/*.mp3
-static/audio/*.wav
-static/audio/*.opus
-
-# Archivos temporales de sistema o editores
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
+*.log
+static/audio/*
+!static/audio/.keep
