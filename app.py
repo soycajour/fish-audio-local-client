@@ -9,20 +9,38 @@ import re
 import time
 import uuid
 from pathlib import Path
+import logging
+from collections import defaultdict
 
 from flask import Flask, jsonify, request, send_from_directory, render_template
 import requests
+from werkzeug.utils import secure_filename
+import io
+from pydub import AudioSegment
 
 import threading
 
 BASE_DIR = Path(__file__).resolve().parent
 AUDIO_DIR = BASE_DIR / "static" / "audio"
-CONFIG_PATH = BASE_DIR / "config.json"
-HISTORY_PATH = BASE_DIR / "history.json"
-TRASH_PATH = BASE_DIR / "trash.json"
+DATA_DIR = BASE_DIR / "data"
+CONFIG_PATH = DATA_DIR / "config.json"
+HISTORY_PATH = DATA_DIR / "history.json"
+TRASH_PATH = DATA_DIR / "trash.json"
 FISH_TTS_URL = "https://api.fish.audio/v1/tts"
 
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(
+    filename=BASE_DIR / 'app.log',
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+rate_limit_store = defaultdict(list)
+RATE_LIMIT = 15
+RATE_LIMIT_WINDOW = 60
 
 file_lock = threading.Lock()
 
@@ -30,6 +48,10 @@ DEFAULT_CONFIG = {
     "api_key": "",
     "voices": [],          # [{ "name": "Narrador v2", "reference_id": "xxxx" }]
     "default_model": "s2.1-pro-free",
+    "format": "mp3",
+    "speed": 1.0,
+    "volume": 0.0,
+    "normalize": True
 }
 
 app = Flask(__name__)
@@ -100,6 +122,10 @@ def update_config():
         cfg["default_model"] = data["default_model"].strip()
     if "voices" in data and isinstance(data["voices"], list):
         cfg["voices"] = data["voices"]
+
+    for field in ["format", "speed", "volume", "normalize"]:
+        if field in data:
+            cfg[field] = data[field]
 
     save_json(CONFIG_PATH, cfg)
     safe = dict(cfg)
@@ -260,7 +286,7 @@ def split_text_into_chunks(text: str, max_chars: int = 220) -> list:
         if current_chunk:
             chunks.append(current_chunk)
 
-    return [c for c in chunks if c.strip()]
+    return chunks
 
 
 # --------------------------------------------------------------- generate --
@@ -277,63 +303,25 @@ def generate():
         return jsonify({"error": "El texto está vacío."}), 400
 
     reference_id = data.get("reference_id") or ""
-    reference_audio = data.get("reference_audio")  # base64 + mime type: {"data": "...", "text": "..."}
-    model = data.get("model") or cfg.get("default_model", "s2.1-pro-free")
+    model = "s2.1-pro-free"  # Forzado el modelo gratuito
+
+    client_ip = request.remote_addr
+    now = time.time()
+    rate_limit_store[client_ip] = [t for t in rate_limit_store[client_ip] if now - t < RATE_LIMIT_WINDOW]
+    if len(rate_limit_store[client_ip]) >= RATE_LIMIT:
+        logger.warning(f"Rate limit excedido para IP: {client_ip}")
+        return jsonify({"error": "Demasiadas peticiones. Intenta de nuevo en un minuto."}), 429
+    rate_limit_store[client_ip].append(now)
+
     audio_format = data.get("format") or "mp3"
     speed = float(data.get("speed", 1.0) or 1.0)
     volume = float(data.get("volume", 0) or 0)
     normalize = bool(data.get("normalize", True))
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "model": model,
-    }
-
-    # Dividir el texto en fragmentos para evitar alucinaciones/balbuceos
-    text_chunks = split_text_into_chunks(text, max_chars=220)
-    audio_bytes_list = []
-
-    for chunk in text_chunks:
-        body = {
-            "text": chunk,
-            "format": audio_format,
-            "normalize": normalize,
-            "prosody": {"speed": speed, "volume": volume},
-        }
-
-        # Si mandas reference_id, usa eso (voz guardada)
-        if reference_id:
-            body["reference_id"] = reference_id
-        # Si mandas reference_audio (instant clone), úsalo
-        elif reference_audio and isinstance(reference_audio, dict):
-            body["references"] = [{
-                "audio": reference_audio.get("data", ""),
-                "text": reference_audio.get("text", ""),
-            }]
-
-        try:
-            resp = requests.post(FISH_TTS_URL, headers=headers, json=body, timeout=120)
-        except requests.RequestException as exc:
-            return jsonify({"error": f"No se pudo contactar a Fish Audio: {exc}"}), 502
-
-        if not resp.ok:
-            try:
-                detail = resp.json()
-            except ValueError:
-                detail = resp.text
-            return jsonify({"error": "Fish Audio devolvió un error.", "detail": detail,
-                             "status": resp.status_code}), resp.status_code
-
-        audio_bytes_list.append(resp.content)
-
-    final_audio = b"".join(audio_bytes_list)
-
-    entry_id = uuid.uuid4().hex[:12]
+    entry_id = uuid.uuid4().hex
     filename = f"{entry_id}.{audio_format}"
-    with open(AUDIO_DIR / filename, "wb") as f:
-        f.write(final_audio)
 
+    # Crear entrada en historial con estado "pending"
     entry = {
         "id": entry_id,
         "text": text,
@@ -341,21 +329,108 @@ def generate():
         "model": model,
         "format": audio_format,
         "filename": filename,
-        "timestamp": time.time(),
+        "timestamp": now,
+        "status": "pending",
+        "speed": speed,
+        "volume": volume,
+        "normalize": normalize
     }
+
     history = load_history()
     history.append(entry)
     save_json(HISTORY_PATH, history)
+
+    def perform_generation():
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "model": model,
+        }
+        text_chunks = split_text_into_chunks(text, max_chars=220)
+        audio_bytes_list = []
+        audio_segments = []
+        success = True
+        error_msg = ""
+
+        for chunk in text_chunks:
+            body = {
+                "text": chunk,
+                "format": audio_format,
+                "normalize": normalize,
+                "prosody": {"speed": speed, "volume": volume},
+            }
+            if reference_id:
+                body["reference_id"] = reference_id
+
+            try:
+                resp = requests.post(FISH_TTS_URL, headers=headers, json=body, timeout=120)
+                if not resp.ok:
+                    success = False
+                    try:
+                        detail = resp.json()
+                        error_msg = detail.get("detail", resp.text)
+                    except ValueError:
+                        error_msg = resp.text
+                    break
+                audio_bytes_list.append(resp.content)
+                try:
+                    segment = AudioSegment.from_file(io.BytesIO(resp.content), format=audio_format)
+                    audio_segments.append(segment)
+                except Exception as e:
+                    logger.error(f"Error procesando chunk con pydub: {e}")
+            except Exception as exc:
+                success = False
+                error_msg = str(exc)
+                break
+
+        if success:
+            if len(audio_segments) == len(text_chunks) and len(audio_segments) > 0:
+                try:
+                    final_segment = audio_segments[0]
+                    for seg in audio_segments[1:]:
+                        final_segment += seg
+                    out_f = io.BytesIO()
+                    final_segment.export(out_f, format=audio_format)
+                    final_audio = out_f.getvalue()
+                except Exception as e:
+                    logger.error(f"Fallo export pydub. Concatenando en crudo. Error: {e}")
+                    final_audio = b"".join(audio_bytes_list)
+            else:
+                final_audio = b"".join(audio_bytes_list)
+
+            try:
+                with open(AUDIO_DIR / filename, "wb") as f:
+                    f.write(final_audio)
+            except Exception as e:
+                success = False
+                error_msg = f"No se pudo guardar el archivo final: {e}"
+
+        # Actualizar historial
+        hist = load_history()
+        for idx, item in enumerate(hist):
+            if item["id"] == entry_id:
+                hist[idx]["status"] = "success" if success else "failed"
+                if not success:
+                    hist[idx]["error"] = error_msg
+                break
+        save_json(HISTORY_PATH, hist)
+
+    # Iniciar hilo de generación
+    threading.Thread(target=perform_generation, daemon=True).start()
 
     return jsonify({"entry": entry, "audio_url": f"/static/audio/{filename}"})
 
 
 @app.route("/static/audio/<path:filename>")
 def serve_audio(filename):
-    return send_from_directory(AUDIO_DIR, filename)
+    safe_name = secure_filename(filename)
+    if not safe_name or safe_name != filename:
+        return "Invalid filename", 400
+    return send_from_directory(AUDIO_DIR, safe_name)
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
-    print(f"\n  Fish Audio Local corriendo en: http://127.0.0.1:{port}\n")
+    logger.info(f"Iniciando Fish Audio Local en puerto {port}")
     app.run(host="127.0.0.1", port=port, debug=False)
+

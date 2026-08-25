@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Fish Audio Local — Texto a voz</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -23,35 +23,18 @@
 
 <main class="layout">
 
-  <!-- ------------------------------------------------------------ editor -->
+  <!-- ------------------------------------------------------------ panel izquierdo -->
   <section class="editor-panel">
+    
+    <!-- Editor Card -->
     <div class="editor-card">
       <div class="editor-toolbar">
         <div class="voice-picker">
           <label for="voiceSelect">Voz</label>
           <select id="voiceSelect">
-            <option value="">Voz por defecto del modelo</option>
+            <!-- Cargado dinámicamente: solo voces agregadas por el usuario -->
           </select>
         </div>
-        <button id="tagEmphasisBtn" class="tag-btn" title="Envuelve el texto seleccionado en [énfasis]">
-          + énfasis
-        </button>
-        <button id="cloneVoiceToggleBtn" class="tag-btn" title="Clonar una voz al vuelo (sin guardarla)">
-          🎙️ clonar voz
-        </button>
-      </div>
-
-      <!-- Panel de clonación (hidden por defecto) -->
-      <div id="cloneVoicePanel" class="clone-panel hidden">
-        <div class="clone-header">
-          <span>Clonar voz al vuelo</span>
-          <button id="cloneVoicePanelCloseBtn" class="clone-close">✕</button>
-        </div>
-        <p class="clone-hint">Sube una muestra de audio (10-30 seg) para que Fish Audio la use como referencia en esta generación.</p>
-        <input id="cloneVoiceFile" type="file" accept="audio/wav,audio/mp3,audio/m4a,audio/opus,.wav,.mp3,.m4a,.opus" />
-        <input id="cloneVoiceTranscript" type="text" placeholder="(Opcional) Qué se dice en el audio" />
-        <button id="cloneVoiceReadyBtn" class="mini-btn">Listo</button>
-        <div id="cloneVoiceStatus" class="clone-status"></div>
       </div>
 
       <textarea id="textInput" placeholder="Escribe o pega el texto que quieres convertir en voz…"></textarea>
@@ -68,64 +51,63 @@
       </div>
     </div>
 
-    <!-- --------------------------------------- Audios generados (Lista) -->
+    <!-- Audios Generados (Historia de la generación) -->
     <div id="resultsSection" class="results-section">
-      <div class="results-header">
-        <div class="results-title">
-          <h3>Audios Generados</h3>
-          <span id="audioCountBadge" class="audio-count-badge">0</span>
-        </div>
+      <div class="section-header">
+        <h3>Historia de la generación</h3>
+        <span id="audioCountBadge" class="audio-count-badge">0</span>
       </div>
+      
       <div id="audioCardsContainer" class="audio-cards-container">
         <div id="resultsEmpty" class="results-empty">
           <span class="empty-icon">🎧</span>
-          <p>Los audios que generes se irán acumulando aquí abajo sin borrar los anteriores.</p>
+          <p>Los audios que generes se irán acumulando aquí abajo en orden de creación.</p>
         </div>
+      </div>
+    </div>
+
+    <!-- Biblioteca My Voice -->
+    <div class="library-section">
+      <div class="section-header">
+        <h3>Biblioteca My Voice</h3>
+      </div>
+      <div id="libraryList" class="library-list">
+        <!-- Voces del usuario renderizadas con estilo premium de tarjeta -->
       </div>
     </div>
 
     <p id="errorBox" class="error-box hidden"></p>
   </section>
 
-  <!-- ------------------------------------------------------------- panel -->
+  <!-- ------------------------------------------------------------ panel derecho -->
   <section class="side-panel">
     <div class="tabs">
       <button class="tab-btn active" data-tab="ajustes">Ajustes</button>
-      <button class="tab-btn" data-tab="historia">Historia</button>
+      <button class="tab-btn" data-tab="historia">Historial</button>
       <button class="tab-btn" data-tab="papelera">Papelera <span id="trashCountBadge" class="trash-count-badge">0</span></button>
     </div>
 
-    <!-- ------------------------------------------------------- Ajustes -->
+    <!-- Ajustes -->
     <div id="tab-ajustes" class="tab-content active">
-
       <div class="field-group">
         <label>Clave de API de Fish Audio</label>
         <div class="input-row">
           <input id="apiKeyInput" type="password" placeholder="fs_..." autocomplete="off">
           <button id="saveKeyBtn" class="mini-btn">Guardar</button>
         </div>
-        <p class="hint">Consíguela en <a href="https://fish.audio" target="_blank" rel="noopener">fish.audio</a> → API Keys. Se guarda solo en tu PC (config.json).</p>
+        <p class="hint">Consíguela en <a href="https://fish.audio" target="_blank" rel="noopener">fish.audio</a>. Se guarda solo localmente.</p>
       </div>
 
       <div class="field-group">
-        <label>Modelo</label>
-        <select id="modelSelect">
-          <option value="s2.1-pro-free">s2.1-pro-free (gratis, ilimitado)</option>
-          <option value="s2-pro">s2-pro</option>
-          <option value="custom">Otro (escribir manualmente)</option>
-        </select>
-        <input id="modelCustomInput" class="hidden" type="text" placeholder="nombre-del-modelo">
-      </div>
-
-      <div class="field-group">
-        <label>Mis voces</label>
-        <div id="voiceList" class="voice-list"></div>
+        <label>Agregar nueva voz</label>
+        <div class="input-row" style="margin-bottom: 8px;">
+          <input id="newVoiceName" type="text" placeholder="Nombre (ej. Junior Cajour)">
+        </div>
         <div class="input-row">
-          <input id="newVoiceName" type="text" placeholder="Nombre (ej. Narrador v2)">
-          <input id="newVoiceId" type="text" placeholder="reference_id">
+          <input id="newVoiceId" type="text" placeholder="reference_id de la voz">
           <button id="addVoiceBtn" class="mini-btn">+</button>
         </div>
-        <p class="hint">El reference_id sale de tu biblioteca de voces en fish.audio.</p>
+        <p class="hint">El reference_id se obtiene de tu biblioteca en fish.audio.</p>
       </div>
 
       <div class="field-group">
@@ -152,16 +134,15 @@
         <label for="normalizeToggle">Normalización de texto</label>
         <input id="normalizeToggle" type="checkbox" checked>
       </div>
-
     </div>
 
-    <!-- ------------------------------------------------------- Historia -->
+    <!-- Historial Simplificado -->
     <div id="tab-historia" class="tab-content">
       <div id="historyEmpty" class="history-empty">Todavía no has generado nada.</div>
       <div id="historyList" class="history-list"></div>
     </div>
 
-    <!-- ------------------------------------------------------- Papelera -->
+    <!-- Papelera -->
     <div id="tab-papelera" class="tab-content">
       <div class="trash-header">
         <span>Audios eliminados</span>
@@ -170,7 +151,6 @@
       <div id="trashEmpty" class="history-empty">La papelera está vacía.</div>
       <div id="trashList" class="history-list"></div>
     </div>
-
   </section>
 </main>
 
@@ -187,6 +167,53 @@
     <div class="modal-actions">
       <button id="confirmModalCancelBtn" class="modal-btn secondary-btn">Cancelar</button>
       <button id="confirmModalOkBtn" class="modal-btn danger-btn">Mover a la papelera</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal / Popup de Detalles Suave -->
+<div id="detailsModal" class="modal-overlay hidden">
+  <div class="detail-modal-card">
+    <div class="modal-header">
+      <span class="detail-title">🔍 Detalles de la Generación</span>
+      <button id="detailsModalCloseBtn" class="modal-close-btn">✕</button>
+    </div>
+    
+    <div class="detail-grid">
+      <div class="detail-item">
+        <span class="detail-item-label">Modelo</span>
+        <span id="detailModelValue" class="detail-item-value">-</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-item-label">Voz</span>
+        <span id="detailVoiceValue" class="detail-item-value">-</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-item-label">Fecha y Hora</span>
+        <span id="detailDateValue" class="detail-item-value">-</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-item-label">Configuración</span>
+        <span id="detailConfigValue" class="detail-item-value">-</span>
+      </div>
+    </div>
+
+    <div class="detail-item">
+      <span class="detail-item-label" style="margin-bottom: 6px;">Texto Generado</span>
+      <div id="detailTextValue" class="detail-text-box"></div>
+    </div>
+
+    <!-- Reproductor dentro del popup -->
+    <div class="detail-player-bar">
+      <button id="detailPlayBtn" class="detail-play-btn">▶</button>
+      <input id="detailSlider" type="range" min="0" max="100" value="0" class="detail-slider">
+      <span id="detailTime" class="detail-time">0:00 / 0:00</span>
+    </div>
+
+    <div class="modal-actions" style="margin-top: 10px;">
+      <button id="detailCopyBtn" class="modal-btn secondary-btn">📋 Copiar texto</button>
+      <a id="detailDownloadBtn" href="" download class="modal-btn secondary-btn" style="text-decoration: none; text-align: center; display: inline-block;">⬇ Descargar</a>
+      <button id="detailDeleteBtn" class="modal-btn danger-btn">🗑 Papelera</button>
     </div>
   </div>
 </div>

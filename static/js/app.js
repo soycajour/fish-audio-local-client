@@ -2,6 +2,7 @@ const MAX_CONCURRENT_JOBS = 5;
 let activeJobsCount = 0;
 let currentPlayingAudio = null;
 let currentPlayingBtn = null;
+let pollingInterval = null;
 
 const els = {
   apiStatusDot: document.getElementById('apiStatusDot'),
@@ -10,7 +11,6 @@ const els = {
   charCount: document.getElementById('charCount'),
   generateBtn: document.getElementById('generateBtn'),
   generateBtnLabel: document.getElementById('generateBtnLabel'),
-  tagEmphasisBtn: document.getElementById('tagEmphasisBtn'),
   voiceSelect: document.getElementById('voiceSelect'),
   errorBox: document.getElementById('errorBox'),
 
@@ -21,9 +21,7 @@ const els = {
 
   apiKeyInput: document.getElementById('apiKeyInput'),
   saveKeyBtn: document.getElementById('saveKeyBtn'),
-  modelSelect: document.getElementById('modelSelect'),
-  modelCustomInput: document.getElementById('modelCustomInput'),
-  voiceList: document.getElementById('voiceList'),
+  voiceList: document.getElementById('libraryList'),
   newVoiceName: document.getElementById('newVoiceName'),
   newVoiceId: document.getElementById('newVoiceId'),
   addVoiceBtn: document.getElementById('addVoiceBtn'),
@@ -41,10 +39,27 @@ const els = {
   trashEmpty: document.getElementById('trashEmpty'),
   trashList: document.getElementById('trashList'),
   emptyTrashBtn: document.getElementById('emptyTrashBtn'),
+
+  // Modales
+  confirmModal: document.getElementById('confirmModal'),
+  detailsModal: document.getElementById('detailsModal'),
+  detailsModalCloseBtn: document.getElementById('detailsModalCloseBtn'),
+  detailModelValue: document.getElementById('detailModelValue'),
+  detailVoiceValue: document.getElementById('detailVoiceValue'),
+  detailDateValue: document.getElementById('detailDateValue'),
+  detailConfigValue: document.getElementById('detailConfigValue'),
+  detailTextValue: document.getElementById('detailTextValue'),
+  detailPlayBtn: document.getElementById('detailPlayBtn'),
+  detailSlider: document.getElementById('detailSlider'),
+  detailTime: document.getElementById('detailTime'),
+  detailCopyBtn: document.getElementById('detailCopyBtn'),
+  detailDownloadBtn: document.getElementById('detailDownloadBtn'),
+  detailDeleteBtn: document.getElementById('detailDeleteBtn'),
 };
 
-let state = { voices: [], hasApiKey: false };
+let state = { voices: [], hasApiKey: false, config: {} };
 let totalGeneratedAudios = 0;
+let modalAudio = null;
 
 // ------------------------------------------------------------------ tabs --
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -63,21 +78,9 @@ els.textInput.addEventListener('input', () => {
   els.charCount.textContent = `${els.textInput.value.length} caracteres`;
 });
 
-// ----------------------------------------------------------- emphasis tag --
-els.tagEmphasisBtn.addEventListener('click', () => {
-  const el = els.textInput;
-  const start = el.selectionStart, end = el.selectionEnd;
-  const selected = el.value.slice(start, end) || 'texto';
-  const before = el.value.slice(0, start);
-  const after = el.value.slice(end);
-  el.value = `${before}[énfasis]${selected}[/énfasis]${after}`;
-  el.focus();
-  els.charCount.textContent = `${el.value.length} caracteres`;
-});
-
 // ------------------------------------------------------------------ modal --
 function showConfirmModal({ title, message, confirmText, isDanger = true, onConfirm }) {
-  const modal = document.getElementById('confirmModal');
+  const modal = els.confirmModal;
   document.getElementById('confirmModalTitle').textContent = title || 'Confirmación';
   document.getElementById('confirmModalText').textContent = message;
   const okBtn = document.getElementById('confirmModalOkBtn');
@@ -110,24 +113,127 @@ function showConfirmModal({ title, message, confirmText, isDanger = true, onConf
   document.getElementById('confirmModalCloseBtn').addEventListener('click', handleCancel);
 }
 
+// ----------------------------------------------------------- details modal --
+function openDetailsModal(entry) {
+  if (modalAudio) {
+    modalAudio.pause();
+    modalAudio = null;
+  }
+  
+  els.detailModelValue.textContent = entry.model;
+  
+  // Buscar nombre de la voz
+  const voice = state.voices.find(v => v.reference_id === entry.reference_id);
+  const voiceName = voice ? voice.name : 'Voz guardada';
+  els.detailVoiceValue.textContent = voiceName;
+  
+  const date = new Date((entry.timestamp || Date.now() / 1000) * 1000);
+  els.detailDateValue.textContent = date.toLocaleString();
+  
+  // Config: formato, velocidad, volumen, normalización
+  const configText = `Formato: ${entry.format.toUpperCase()} · Vel: ${entry.speed || '1.0'}x · Vol: ${entry.volume || '0'} · Normalización: ${entry.normalize !== false ? 'Sí' : 'No'}`;
+  els.detailConfigValue.textContent = configText;
+  
+  els.detailTextValue.textContent = entry.text;
+  
+  // Configurar audio player del modal
+  const audioUrl = `/static/audio/${entry.filename}`;
+  modalAudio = new Audio(audioUrl);
+  
+  els.detailPlayBtn.textContent = '▶';
+  els.detailSlider.value = 0;
+  els.detailTime.textContent = '0:00 / 0:00';
+  
+  const togglePlay = () => {
+    if (modalAudio.paused) {
+      if (currentPlayingAudio) currentPlayingAudio.pause();
+      modalAudio.play();
+      els.detailPlayBtn.textContent = '⏸';
+    } else {
+      modalAudio.pause();
+      els.detailPlayBtn.textContent = '▶';
+    }
+  };
+  
+  const handleTimeUpdate = () => {
+    if (!modalAudio.duration) return;
+    els.detailSlider.value = (modalAudio.currentTime / modalAudio.duration) * 100;
+    els.detailTime.textContent = `${fmtTime(modalAudio.currentTime)} / ${fmtTime(modalAudio.duration)}`;
+  };
+  
+  const handleLoadedMetadata = () => {
+    els.detailTime.textContent = `0:00 / ${fmtTime(modalAudio.duration)}`;
+  };
+  
+  const handleEnded = () => {
+    els.detailPlayBtn.textContent = '▶';
+  };
+  
+  const handleSliderInput = () => {
+    if (modalAudio.duration) {
+      modalAudio.currentTime = (els.detailSlider.value / 100) * modalAudio.duration;
+    }
+  };
+  
+  modalAudio.addEventListener('timeupdate', handleTimeUpdate);
+  modalAudio.addEventListener('loadedmetadata', handleLoadedMetadata);
+  modalAudio.addEventListener('ended', handleEnded);
+  els.detailSlider.addEventListener('input', handleSliderInput);
+  els.detailPlayBtn.onclick = togglePlay;
+  
+  // Acciones
+  els.detailCopyBtn.onclick = () => {
+    navigator.clipboard.writeText(entry.text);
+    els.detailCopyBtn.textContent = '✓ Copiado';
+    setTimeout(() => { els.detailCopyBtn.textContent = '📋 Copiar texto'; }, 2000);
+  };
+  
+  els.detailDownloadBtn.href = audioUrl;
+  els.detailDownloadBtn.download = entry.filename;
+  
+  els.detailDeleteBtn.onclick = () => {
+    els.detailsModal.classList.add('hidden');
+    confirmMoveToTrash(entry.id, modalAudio);
+  };
+  
+  els.detailsModal.classList.remove('hidden');
+}
+
+els.detailsModalCloseBtn.addEventListener('click', () => {
+  els.detailsModal.classList.add('hidden');
+  if (modalAudio) {
+    modalAudio.pause();
+    modalAudio = null;
+  }
+});
+
 // ------------------------------------------------------------------ init --
 async function init() {
   const cfg = await fetchJSON('/api/config');
   state.hasApiKey = cfg.has_api_key;
   state.voices = cfg.voices || [];
+  state.config = cfg;
+  
   updateApiStatus();
   renderVoices();
-  if (cfg.default_model) {
-    const opt = [...els.modelSelect.options].find(o => o.value === cfg.default_model);
-    if (opt) els.modelSelect.value = cfg.default_model;
-    else {
-      els.modelSelect.value = 'custom';
-      els.modelCustomInput.classList.remove('hidden');
-      els.modelCustomInput.value = cfg.default_model;
-    }
+  
+  // Cargar configuraciones guardadas
+  if (cfg.format) els.formatSelect.value = cfg.format;
+  if (cfg.speed) {
+    els.speedRange.value = cfg.speed;
+    els.speedVal.textContent = `${cfg.speed}x`;
   }
+  if (cfg.volume !== undefined) {
+    els.volumeRange.value = cfg.volume;
+    els.volumeVal.textContent = cfg.volume;
+  }
+  if (cfg.normalize !== undefined) els.normalizeToggle.checked = cfg.normalize;
+
   await loadInitialResults();
   await loadTrash();
+  
+  // Configurar listeners de auto-guardado
+  setupAutoSave();
 }
 
 function updateApiStatus() {
@@ -140,25 +246,56 @@ function updateApiStatus() {
   }
 }
 
-// --------------------------------------------------------------- voices --
+// ------------------------------------------------------------- voices --
 function renderVoices() {
   els.voiceList.innerHTML = '';
-  els.voiceSelect.innerHTML = '<option value="">Voz por defecto del modelo</option>';
+  els.voiceSelect.innerHTML = ''; // Limpiamos opciones
+  
   state.voices.forEach((v, i) => {
-    const chip = document.createElement('div');
-    chip.className = 'voice-chip';
-    chip.innerHTML = `
-      <span><span class="voice-chip-name">${escapeHtml(v.name)}</span> —
-      <span class="voice-chip-id">${escapeHtml(v.reference_id)}</span></span>
-      <button data-i="${i}" title="Eliminar">✕</button>`;
-    chip.querySelector('button').addEventListener('click', () => deleteVoice(i));
-    els.voiceList.appendChild(chip);
+    // Generar avatars y datos ficticios basados en nombre para visuales premium
+    const initials = v.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    const isFemale = v.name.toLowerCase().includes('narradora') || v.name.toLowerCase().includes('marly') || v.name.toLowerCase().includes('sakura');
+    const genderTag = isFemale ? 'female' : 'male';
+    const tagColor = isFemale ? '🎀 femenino' : '👔 masculino';
+    const description = isFemale ? 'Una voz femenina joven y persuasiva, ideal para presentar temas sociales con claridad y convicción.'
+                                 : 'Una voz masculina joven y segura, ideal para narrar conceptos creativos y educativos con un tono inspirador.';
 
+    // Agregar al panel Biblioteca
+    const libraryCard = document.createElement('div');
+    libraryCard.className = 'library-item';
+    libraryCard.innerHTML = `
+      <div class="library-item-avatar">${initials}</div>
+      <div class="library-item-content">
+        <div class="library-item-header">
+          <span class="library-item-name">${escapeHtml(v.name)}</span>
+          <span class="library-item-ref">· ${escapeHtml(v.reference_id)}</span>
+        </div>
+        <p class="library-item-desc">${description}</p>
+        <div class="library-item-tags">
+          <span class="library-tag">🇪🇸 Spanish</span>
+          <span class="library-tag">${tagColor}</span>
+          <span class="library-tag">young</span>
+        </div>
+      </div>
+      <button class="library-item-delete" title="Eliminar voz">✕</button>
+    `;
+    libraryCard.querySelector('.library-item-delete').addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteVoice(i);
+    });
+    els.voiceList.appendChild(libraryCard);
+
+    // Agregar al Select del Editor
     const opt = document.createElement('option');
     opt.value = v.reference_id;
     opt.textContent = v.name;
     els.voiceSelect.appendChild(opt);
   });
+  
+  // Seleccionar la primera voz por defecto si existe
+  if (state.voices.length > 0 && !els.voiceSelect.value) {
+    els.voiceSelect.value = state.voices[0].reference_id;
+  }
 }
 
 els.addVoiceBtn.addEventListener('click', async () => {
@@ -189,87 +326,29 @@ els.saveKeyBtn.addEventListener('click', async () => {
   updateApiStatus();
 });
 
-els.modelSelect.addEventListener('change', () => {
-  els.modelCustomInput.classList.toggle('hidden', els.modelSelect.value !== 'custom');
-});
-
-els.speedRange.addEventListener('input', () => { els.speedVal.textContent = `${els.speedRange.value}x`; });
-els.volumeRange.addEventListener('input', () => { els.volumeVal.textContent = els.volumeRange.value; });
-
-function currentModel() {
-  return els.modelSelect.value === 'custom' ? els.modelCustomInput.value.trim() : els.modelSelect.value;
-}
-
-// --------------------------------------------------------- clone voice --
-let cloneVoiceData = null;
-
-els.cloneVoiceToggleBtn = document.getElementById('cloneVoiceToggleBtn');
-els.cloneVoicePanel = document.getElementById('cloneVoicePanel');
-els.cloneVoicePanelCloseBtn = document.getElementById('cloneVoicePanelCloseBtn');
-els.cloneVoiceFile = document.getElementById('cloneVoiceFile');
-els.cloneVoiceTranscript = document.getElementById('cloneVoiceTranscript');
-els.cloneVoiceReadyBtn = document.getElementById('cloneVoiceReadyBtn');
-els.cloneVoiceStatus = document.getElementById('cloneVoiceStatus');
-
-els.cloneVoiceToggleBtn.addEventListener('click', () => {
-  els.cloneVoicePanel.classList.toggle('hidden');
-  if (!els.cloneVoicePanel.classList.contains('hidden')) {
-    els.cloneVoiceFile.focus();
-  }
-});
-
-els.cloneVoicePanelCloseBtn.addEventListener('click', () => {
-  els.cloneVoicePanel.classList.add('hidden');
-});
-
-els.cloneVoiceReadyBtn.addEventListener('click', async () => {
-  const file = els.cloneVoiceFile.files[0];
-  if (!file) { els.cloneVoiceStatus.textContent = 'Selecciona un archivo de audio.'; return; }
-
-  const reader = new FileReader();
-  reader.onload = () => {
-    const base64 = reader.result.split(',')[1];
-    cloneVoiceData = {
-      data: base64,
-      text: els.cloneVoiceTranscript.value.trim(),
-    };
-    els.cloneVoiceStatus.textContent = `✓ Audio cargado (${(file.size / 1024 / 1024).toFixed(1)} MB)`;
-    els.cloneVoicePanel.classList.add('hidden');
+// Auto-save settings on inputs change
+function setupAutoSave() {
+  const saveFunc = async () => {
+    const format = els.formatSelect.value;
+    const speed = parseFloat(els.speedRange.value);
+    const volume = parseFloat(els.volumeRange.value);
+    const normalize = els.normalizeToggle.checked;
+    
+    await fetchJSON('/api/config', 'POST', {
+      format,
+      speed,
+      volume,
+      normalize
+    });
   };
-  reader.readAsDataURL(file);
-});
-
-// ------------------------------------------------------- queue & badge --
-function updateQueueBadge() {
-  if (activeJobsCount > 0) {
-    els.queueBadge.classList.remove('hidden');
-    if (activeJobsCount >= MAX_CONCURRENT_JOBS) {
-      els.queueBadge.textContent = `${activeJobsCount}/${MAX_CONCURRENT_JOBS} (máximo alcanzado)`;
-      els.queueBadge.classList.add('max-reached');
-      els.generateBtn.disabled = true;
-    } else {
-      els.queueBadge.textContent = `${activeJobsCount}/${MAX_CONCURRENT_JOBS} en curso`;
-      els.queueBadge.classList.remove('max-reached');
-      els.generateBtn.disabled = false;
-    }
-  } else {
-    els.queueBadge.classList.add('hidden');
-    els.queueBadge.classList.remove('max-reached');
-    els.generateBtn.disabled = false;
-  }
-}
-
-function updateAudioCountBadge() {
-  if (els.audioCountBadge) {
-    els.audioCountBadge.textContent = totalGeneratedAudios;
-  }
-}
-
-function checkEmptyState() {
-  const cards = els.audioCardsContainer.querySelectorAll('.audio-card');
-  if (cards.length === 0 && els.resultsEmpty) {
-    els.resultsEmpty.classList.remove('hidden');
-  }
+  
+  els.formatSelect.addEventListener('change', saveFunc);
+  els.speedRange.addEventListener('change', saveFunc);
+  els.volumeRange.addEventListener('change', saveFunc);
+  els.normalizeToggle.addEventListener('change', saveFunc);
+  
+  els.speedRange.addEventListener('input', () => { els.speedVal.textContent = `${els.speedRange.value}x`; });
+  els.volumeRange.addEventListener('input', () => { els.volumeVal.textContent = els.volumeRange.value; });
 }
 
 // ------------------------------------------------------------- generate --
@@ -284,44 +363,21 @@ async function generate() {
     return;
   }
 
-  // Obtener etiqueta de voz
-  let voiceLabel = 'Voz por defecto';
-  if (cloneVoiceData) {
-    voiceLabel = '🎙️ Voz clonada';
-  } else if (els.voiceSelect.value) {
-    const selectedOpt = els.voiceSelect.options[els.voiceSelect.selectedIndex];
-    voiceLabel = selectedOpt ? selectedOpt.textContent : 'Voz personalizada';
-  }
-
   const payload = {
     text,
     reference_id: els.voiceSelect.value,
-    voice_label: voiceLabel,
-    model: currentModel(),
     format: els.formatSelect.value,
     speed: parseFloat(els.speedRange.value),
     volume: parseFloat(els.volumeRange.value),
     normalize: els.normalizeToggle.checked,
   };
 
-  if (cloneVoiceData) {
-    payload.reference_audio = { ...cloneVoiceData };
-  }
-
   activeJobsCount++;
-  updateQueueBadge();
-
   if (els.resultsEmpty) els.resultsEmpty.classList.add('hidden');
 
   // Limpiar caja de texto para permitir redactar el siguiente párrafo inmediatamente
   els.textInput.value = '';
   els.charCount.textContent = '0 caracteres';
-
-  const nextIndexNum = totalGeneratedAudios + 1;
-  const cardId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-  const cardEl = createPendingCard(cardId, payload, nextIndexNum);
-  // Se agrega AL FINAL (appendChild) para mantener el orden: 1º arriba, 2º segundo, 3º tercero...
-  els.audioCardsContainer.appendChild(cardEl);
 
   try {
     const res = await fetch('/api/generate', {
@@ -332,19 +388,15 @@ async function generate() {
     const data = await res.json();
 
     if (!res.ok) {
-      const detail = typeof data.detail === 'object' ? JSON.stringify(data.detail) : (data.detail || '');
-      updateCardToError(cardEl, `${data.error || 'Error al generar audio.'}${detail ? '\n' + detail : ''}`);
+      showError(data.error || 'Error al enviar petición al servidor.');
+      activeJobsCount--;
     } else {
-      updateCardToSuccess(cardEl, data.entry, data.audio_url, payload, nextIndexNum);
-      totalGeneratedAudios++;
-      updateAudioCountBadge();
-      loadHistory();
+      // Iniciar el sondeo porque el audio se está generando en segundo plano en el servidor
+      startPolling();
     }
   } catch (err) {
-    updateCardToError(cardEl, `Error de conexión: ${err}`);
-  } finally {
+    showError(`Error de conexión: ${err}`);
     activeJobsCount--;
-    updateQueueBadge();
   }
 }
 
@@ -357,131 +409,147 @@ function showError(msg) { els.errorBox.textContent = msg; els.errorBox.classList
 function hideError() { els.errorBox.classList.add('hidden'); }
 
 // ---------------------------------------------------- card rendering --
-function createPendingCard(cardId, payload, indexNum) {
+function createPendingCard(entry) {
   const card = document.createElement('div');
-  card.id = cardId;
+  card.id = `card-${entry.id}`;
   card.className = 'audio-card pending';
 
   card.innerHTML = `
     <div class="audio-card-header">
       <div class="pending-status">
         <span class="spinner"></span>
-        <span>Generando audio (${activeJobsCount}/${MAX_CONCURRENT_JOBS})...</span>
+        <span>Generando audio...</span>
       </div>
       <div class="audio-card-meta">
-        <span class="badge-number">#${indexNum}</span>
-        <span class="badge-model">${escapeHtml(payload.model)}</span>
-        <span class="${payload.reference_audio ? 'badge-clone' : 'badge-voice'}">${escapeHtml(payload.voice_label)}</span>
+        <span class="audio-card-time">${fmtTime(0)}</span>
       </div>
     </div>
-    <div class="audio-card-text">${escapeHtml(payload.text)}</div>
+    <div class="audio-card-text">${escapeHtml(entry.text)}</div>
   `;
   return card;
 }
 
-function updateCardToSuccess(cardEl, entry, audioUrl, payload, indexNum) {
-  cardEl.className = 'audio-card';
+function renderAudioCard(entry) {
+  const card = document.createElement('div');
+  card.id = `card-${entry.id}`;
+  card.className = 'audio-card';
+  
+  if (entry.status === 'pending') {
+    return createPendingCard(entry);
+  }
+  
+  if (entry.status === 'failed') {
+    card.className = 'audio-card error';
+    card.innerHTML = `
+      <div class="audio-card-header">
+        <div class="error-status">❌ Error al generar</div>
+        <button class="audio-card-btn icon-only details-delete-btn" title="Eliminar permanentemente">🗑</button>
+      </div>
+      <div class="audio-card-text">${escapeHtml(entry.text)}</div>
+      <div class="error-detail">${escapeHtml(entry.error || 'Detalle desconocido')}</div>
+    `;
+    card.querySelector('.details-delete-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      permanentDelete(entry.id);
+    });
+    return card;
+  }
 
   const date = new Date((entry.timestamp || Date.now() / 1000) * 1000);
   const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const isClone = Boolean(payload?.reference_audio);
-  const voiceLabel = payload?.voice_label || 'Voz';
+  const audioUrl = `/static/audio/${entry.filename}`;
+  
+  // Buscar voz
+  const voice = state.voices.find(v => v.reference_id === entry.reference_id);
+  const voiceName = voice ? voice.name : 'Voz guardada';
+  const initials = voiceName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
-  cardEl.innerHTML = `
+  card.innerHTML = `
     <div class="audio-card-header">
       <div class="audio-card-meta">
-        <span class="badge-number">#${indexNum}</span>
-        <span class="badge-model">${escapeHtml(entry.model || payload.model)}</span>
-        <span class="${isClone ? 'badge-clone' : 'badge-voice'}">${escapeHtml(voiceLabel)}</span>
+        <div class="audio-card-avatar">${initials}</div>
+        <span class="audio-card-voice">${escapeHtml(voiceName)}</span>
         <span class="audio-card-time">${timeStr}</span>
       </div>
-      <button class="audio-card-delete-btn" title="Mover a la papelera">🗑</button>
+      <div class="audio-card-actions">
+        <button class="audio-card-btn card-play-btn">▶ Reproducir</button>
+        <button class="audio-card-btn card-download-btn">⬇ Descargar</button>
+        <button class="audio-card-btn icon-only card-share-btn" title="Copiar enlace">🔗</button>
+        <button class="audio-card-btn icon-only card-delete-btn" title="Mover a la papelera">🗑</button>
+      </div>
     </div>
     <div class="audio-card-text">${escapeHtml(entry.text)}</div>
-    <div class="audio-card-player">
-      <button class="card-play-btn">▶</button>
-      <input type="range" min="0" max="100" value="0" class="card-player-range">
-      <span class="card-player-time">0:00 / 0:00</span>
-      <a href="${audioUrl}" download class="card-download-btn" title="Descargar audio">⬇ MP3</a>
-      <button class="card-copy-btn" title="Copiar texto">📋 Copiar</button>
-    </div>
   `;
 
-  setupCardPlayer(cardEl, entry, audioUrl);
+  // Listener para el popup suave
+  card.addEventListener('click', (e) => {
+    openDetailsModal(entry);
+  });
+
+  // Evitar propagación en botones
+  const playBtn = card.querySelector('.card-play-btn');
+  const downloadBtn = card.querySelector('.card-download-btn');
+  const shareBtn = card.querySelector('.card-share-btn');
+  const deleteBtn = card.querySelector('.card-delete-btn');
+
+  playBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    togglePlayCard(entry, playBtn);
+  });
+
+  downloadBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const a = document.createElement('a');
+    a.href = audioUrl;
+    a.download = entry.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+
+  shareBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(window.location.origin + audioUrl);
+    shareBtn.textContent = '✓';
+    setTimeout(() => { shareBtn.textContent = '🔗'; }, 2000);
+  });
+
+  deleteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    confirmMoveToTrash(entry.id);
+  });
+
+  return card;
 }
 
-function setupCardPlayer(cardEl, entry, audioUrl) {
-  const audio = new Audio(audioUrl);
-  const playBtn = cardEl.querySelector('.card-play-btn');
-  const range = cardEl.querySelector('.card-player-range');
-  const timeSpan = cardEl.querySelector('.card-player-time');
-  const deleteBtn = cardEl.querySelector('.audio-card-delete-btn');
-  const copyBtn = cardEl.querySelector('.card-copy-btn');
+let cardAudios = {};
 
-  playBtn.addEventListener('click', () => {
-    if (audio.paused) {
-      if (currentPlayingAudio && currentPlayingAudio !== audio) {
-        currentPlayingAudio.pause();
-        if (currentPlayingBtn) currentPlayingBtn.textContent = '▶';
-      }
-      audio.play();
-      playBtn.textContent = '⏸';
-      currentPlayingAudio = audio;
-      currentPlayingBtn = playBtn;
-    } else {
-      audio.pause();
-      playBtn.textContent = '▶';
-    }
-  });
-
-  audio.addEventListener('timeupdate', () => {
-    if (!audio.duration) return;
-    range.value = (audio.currentTime / audio.duration) * 100;
-    timeSpan.textContent = `${fmtTime(audio.currentTime)} / ${fmtTime(audio.duration)}`;
-  });
-
-  audio.addEventListener('loadedmetadata', () => {
-    timeSpan.textContent = `0:00 / ${fmtTime(audio.duration)}`;
-  });
-
-  audio.addEventListener('ended', () => {
-    playBtn.textContent = '▶';
-  });
-
-  range.addEventListener('input', () => {
-    if (audio.duration) {
-      audio.currentTime = (range.value / 100) * audio.duration;
-    }
-  });
-
-  if (copyBtn) {
-    copyBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(entry.text);
-      copyBtn.textContent = '✓ Copiado';
-      setTimeout(() => { copyBtn.textContent = '📋 Copiar'; }, 2000);
+function togglePlayCard(entry, btn) {
+  const url = `/static/audio/${entry.filename}`;
+  if (!cardAudios[entry.id]) {
+    cardAudios[entry.id] = new Audio(url);
+    cardAudios[entry.id].addEventListener('ended', () => {
+      btn.textContent = '▶ Reproducir';
     });
   }
-
-  if (deleteBtn) {
-    deleteBtn.addEventListener('click', () => {
-      confirmMoveToTrash(entry.id, audio, cardEl);
-    });
+  
+  const audio = cardAudios[entry.id];
+  if (audio.paused) {
+    // Pausar cualquier otro que esté sonando
+    if (currentPlayingAudio && currentPlayingAudio !== audio) {
+      currentPlayingAudio.pause();
+      if (currentPlayingBtn) currentPlayingBtn.textContent = '▶ Reproducir';
+    }
+    if (modalAudio) modalAudio.pause();
+    
+    audio.play();
+    btn.textContent = '⏸ Pausar';
+    currentPlayingAudio = audio;
+    currentPlayingBtn = btn;
+  } else {
+    audio.pause();
+    btn.textContent = '▶ Reproducir';
   }
-}
-
-function updateCardToError(cardEl, errorMsg) {
-  cardEl.className = 'audio-card error';
-  cardEl.innerHTML = `
-    <div class="audio-card-header">
-      <div class="error-status">❌ Error al generar</div>
-      <button class="audio-card-delete-btn" title="Cerrar">✕</button>
-    </div>
-    <div class="error-detail">${escapeHtml(errorMsg)}</div>
-  `;
-  cardEl.querySelector('.audio-card-delete-btn').addEventListener('click', () => {
-    cardEl.remove();
-    checkEmptyState();
-  });
 }
 
 // ---------------------------------------------------- initial results --
@@ -489,7 +557,9 @@ async function loadInitialResults() {
   const history = await fetchJSON('/api/history');
   els.audioCardsContainer.innerHTML = '';
 
-  if (!history || history.length === 0) {
+  const activeHistory = history.filter(item => !item.trashed_at);
+
+  if (!activeHistory || activeHistory.length === 0) {
     if (els.resultsEmpty) els.resultsEmpty.classList.remove('hidden');
     totalGeneratedAudios = 0;
     updateAudioCountBadge();
@@ -497,66 +567,86 @@ async function loadInitialResults() {
   }
 
   if (els.resultsEmpty) els.resultsEmpty.classList.add('hidden');
-  totalGeneratedAudios = history.length;
+  totalGeneratedAudios = activeHistory.length;
   updateAudioCountBadge();
 
-  // Renderizar los elementos en el orden recibido (cronológico: 1º de primero, 2º de segundo...)
-  history.forEach((item, idx) => {
-    const cardEl = document.createElement('div');
-    cardEl.className = 'audio-card';
-    const audioUrl = `/static/audio/${item.filename}`;
-    const date = new Date((item.timestamp || Date.now() / 1000) * 1000);
-    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    cardEl.innerHTML = `
-      <div class="audio-card-header">
-        <div class="audio-card-meta">
-          <span class="badge-number">#${idx + 1}</span>
-          <span class="badge-model">${escapeHtml(item.model)}</span>
-          <span class="badge-voice">${escapeHtml(item.reference_id ? 'Voz guardada' : 'Voz por defecto')}</span>
-          <span class="audio-card-time">${timeStr}</span>
-        </div>
-        <button class="audio-card-delete-btn" title="Mover a la papelera">🗑</button>
-      </div>
-      <div class="audio-card-text">${escapeHtml(item.text)}</div>
-      <div class="audio-card-player">
-        <button class="card-play-btn">▶</button>
-        <input type="range" min="0" max="100" value="0" class="card-player-range">
-        <span class="card-player-time">0:00 / 0:00</span>
-        <a href="${audioUrl}" download class="card-download-btn" title="Descargar audio">⬇ MP3</a>
-        <button class="card-copy-btn" title="Copiar texto">📋 Copiar</button>
-      </div>
-    `;
-
-    setupCardPlayer(cardEl, item, audioUrl);
+  // Renderizar al revés para que los más nuevos aparezcan arriba
+  activeHistory.slice().reverse().forEach((item) => {
+    const cardEl = renderAudioCard(item);
     els.audioCardsContainer.appendChild(cardEl);
   });
+
+  // Comprobar si hay elementos pendientes para arrancar el polling
+  const hasPending = activeHistory.some(h => h.status === 'pending');
+  if (hasPending) {
+    startPolling();
+  }
+}
+
+// ----------------------------------------------------------- polling --
+function startPolling() {
+  if (pollingInterval) return;
+  pollingInterval = setInterval(async () => {
+    const history = await fetchJSON('/api/history');
+    const activeHistory = history.filter(item => !item.trashed_at);
+    
+    const pendingJobs = activeHistory.filter(h => h.status === 'pending');
+    activeJobsCount = pendingJobs.length;
+    updateQueueBadge();
+
+    // Re-renderizar lista
+    els.audioCardsContainer.innerHTML = '';
+    activeHistory.slice().reverse().forEach((item) => {
+      const cardEl = renderAudioCard(item);
+      els.audioCardsContainer.appendChild(cardEl);
+    });
+
+    totalGeneratedAudios = activeHistory.length;
+    updateAudioCountBadge();
+
+    if (activeJobsCount === 0) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+  }, 2000);
+}
+
+function updateQueueBadge() {
+  if (activeJobsCount > 0) {
+    els.queueBadge.classList.remove('hidden');
+    els.queueBadge.textContent = `${activeJobsCount} en curso`;
+  } else {
+    els.queueBadge.classList.add('hidden');
+  }
+}
+
+function updateAudioCountBadge() {
+  if (els.audioCountBadge) {
+    els.audioCountBadge.textContent = totalGeneratedAudios;
+  }
 }
 
 // --------------------------------------------------------------- history --
 async function loadHistory() {
   const history = await fetchJSON('/api/history');
+  const activeHistory = history.filter(item => !item.trashed_at && item.status !== 'pending');
   els.historyList.innerHTML = '';
-  els.historyEmpty.classList.toggle('hidden', history.length > 0);
+  els.historyEmpty.classList.toggle('hidden', activeHistory.length > 0);
 
-  history.forEach((item, idx) => {
+  activeHistory.slice().reverse().forEach((item, idx) => {
     const div = document.createElement('div');
     div.className = 'history-item';
     const date = new Date(item.timestamp * 1000);
-    const today = new Date();
-    const isToday = date.toDateString() === today.toDateString();
-    const timeLabel = isToday
-      ? `Hoy ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
-      : date.toLocaleDateString();
+    const timeLabel = date.toLocaleString();
 
     div.innerHTML = `
       <div class="history-item-top">
-        <span class="history-item-time">#${idx + 1} · ${timeLabel} · ${escapeHtml(item.model)}</span>
+        <span class="history-item-time">#${activeHistory.length - idx} · ${timeLabel}</span>
       </div>
       <div class="history-item-text">${escapeHtml(item.text)}</div>
       <div class="history-item-actions">
         <button class="play-hist-btn">▶ Escuchar</button>
-        <a href="/static/audio/${item.filename}" download>⬇ Descargar</a>
+        <a href="/static/audio/${item.filename}" download="${item.filename}">⬇ Descargar</a>
         <button class="delete-btn">🗑 Papelera</button>
       </div>`;
 
@@ -578,15 +668,15 @@ async function loadTrash() {
   els.trashList.innerHTML = '';
   els.trashEmpty.classList.toggle('hidden', trash.length > 0);
 
-  trash.forEach(item => {
+  trash.slice().reverse().forEach(item => {
     const div = document.createElement('div');
     div.className = 'history-item';
     const date = new Date((item.trashed_at || item.timestamp) * 1000);
-    const dateStr = date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+    const dateStr = date.toLocaleString();
 
     div.innerHTML = `
       <div class="history-item-top">
-        <span class="history-item-time">Eliminado: ${dateStr} · ${escapeHtml(item.model)}</span>
+        <span class="history-item-time">Eliminado: ${dateStr}</span>
       </div>
       <div class="history-item-text">${escapeHtml(item.text)}</div>
       <div class="history-item-actions">
@@ -605,16 +695,7 @@ async function loadTrash() {
     });
 
     div.querySelector('.delete-btn').addEventListener('click', () => {
-      showConfirmModal({
-        title: '⚠️ Eliminar permanentemente',
-        message: '¿Estás seguro de que deseas eliminar este audio PERMANENTEMENTE? Esta acción no se puede deshacer.',
-        confirmText: 'Eliminar definitivamente',
-        isDanger: true,
-        onConfirm: async () => {
-          await fetchJSON(`/api/trash/${item.id}`, 'DELETE');
-          await loadTrash();
-        }
-      });
+      permanentDelete(item.id);
     });
 
     els.trashList.appendChild(div);
@@ -634,17 +715,19 @@ els.emptyTrashBtn.addEventListener('click', () => {
   });
 });
 
-function confirmMoveToTrash(entryId, audioObj, cardEl) {
+function confirmMoveToTrash(entryId, audioObj) {
   showConfirmModal({
     title: '🗑️ Mover a la papelera',
     message: '¿Estás seguro de que quieres mover este audio a la papelera?',
     confirmText: 'Mover a la papelera',
     isDanger: true,
     onConfirm: async () => {
-      if (audioObj && currentPlayingAudio === audioObj) {
+      if (audioObj) {
         audioObj.pause();
+      }
+      if (currentPlayingAudio) {
+        currentPlayingAudio.pause();
         currentPlayingAudio = null;
-        currentPlayingBtn = null;
       }
       await fetchJSON(`/api/history/${entryId}/trash`, 'POST');
       await loadInitialResults();
@@ -654,11 +737,27 @@ function confirmMoveToTrash(entryId, audioObj, cardEl) {
   });
 }
 
+function permanentDelete(entryId) {
+  showConfirmModal({
+    title: '⚠️ Eliminar permanentemente',
+    message: '¿Estás seguro de que deseas eliminar este audio PERMANENTEMENTE? Esta acción no se puede deshacer.',
+    confirmText: 'Eliminar definitivamente',
+    isDanger: true,
+    onConfirm: async () => {
+      await fetchJSON(`/api/trash/${entryId}`, 'DELETE');
+      await loadTrash();
+      await loadInitialResults();
+    }
+  });
+}
+
 function playAudioGlobal(url) {
   if (currentPlayingAudio) {
     currentPlayingAudio.pause();
-    if (currentPlayingBtn) currentPlayingBtn.textContent = '▶';
+    if (currentPlayingBtn) currentPlayingBtn.textContent = '▶ Reproducir';
   }
+  if (modalAudio) modalAudio.pause();
+  
   const audio = new Audio(url);
   currentPlayingAudio = audio;
   audio.play();
