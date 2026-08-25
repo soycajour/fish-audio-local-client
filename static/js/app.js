@@ -466,12 +466,29 @@ function createPendingCard(entry) {
         <span class="spinner"></span>
         <span>Generando audio...</span>
       </div>
-      <div class="audio-card-meta">
+      <div class="audio-card-meta" style="display:flex; gap:10px; align-items:center;">
         <span class="audio-card-time">${fmtTime(0)}</span>
+        <button class="audio-card-btn icon-only cancel-btn" title="Cancelar generación" style="color:var(--danger)">⏹</button>
       </div>
     </div>
     <div class="audio-card-text">${escapeHtml(entry.text)}</div>
   `;
+
+  const cancelBtn = card.querySelector('.cancel-btn');
+  cancelBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    
+    // Animate button scale for active state manually if we want, or rely on CSS
+    animate(cancelBtn, { scale: 0.9 }, { type: "spring", duration: 0.2 });
+    
+    try {
+      await fetch(`/api/generate/${entry.id}/cancel`, { method: 'POST' });
+      cancelBtn.textContent = '⏳'; // Feedback visual
+    } catch (err) {
+      console.error('Error al cancelar:', err);
+    }
+  });
+
   return card;
 }
 

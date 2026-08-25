@@ -39,6 +39,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 rate_limit_store = defaultdict(list)
+cancel_events = {}
 RATE_LIMIT = 15
 RATE_LIMIT_WINDOW = 60
 
@@ -353,6 +354,10 @@ def generate():
         error_msg = ""
 
         for chunk in text_chunks:
+            if cancel_events[entry_id].is_set():
+                success = False
+                error_msg = "Cancelado por el usuario"
+                break
             body = {
                 "text": chunk,
                 "format": audio_format,
@@ -414,11 +419,20 @@ def generate():
                     hist[idx]["error"] = error_msg
                 break
         save_json(HISTORY_PATH, hist)
+        cancel_events.pop(entry_id, None)
 
+    cancel_events[entry_id] = threading.Event()
     # Iniciar hilo de generación
     threading.Thread(target=perform_generation, daemon=True).start()
 
     return jsonify({"entry": entry, "audio_url": f"/static/audio/{filename}"})
+
+@app.route("/api/generate/<entry_id>/cancel", methods=["POST"])
+def cancel_generation(entry_id):
+    if entry_id in cancel_events:
+        cancel_events[entry_id].set()
+        return jsonify({"success": True, "message": "Cancelación solicitada."})
+    return jsonify({"error": "Proceso no encontrado o ya terminó."}), 404
 
 
 @app.route("/static/audio/<path:filename>")
@@ -429,7 +443,20 @@ def serve_audio(filename):
     return send_from_directory(AUDIO_DIR, safe_name)
 
 
+def startup_cleanup():
+    hist = load_history()
+    changed = False
+    for item in hist:
+        if item.get("status") == "pending":
+            item["status"] = "failed"
+            item["error"] = "Cancelado (Servidor reiniciado)"
+            changed = True
+    if changed:
+        save_json(HISTORY_PATH, hist)
+        logger.info("Limpiados procesos zombis en el historial.")
+
 if __name__ == "__main__":
+    startup_cleanup()
     port = int(os.environ.get("PORT", 5050))
     logger.info(f"Iniciando Fish Audio Local en puerto {port}")
     app.run(host="127.0.0.1", port=port, debug=False)
