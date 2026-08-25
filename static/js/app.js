@@ -1,3 +1,5 @@
+import { animate } from "https://esm.sh/motion@11.11.13";
+
 const MAX_CONCURRENT_JOBS = 5;
 let activeJobsCount = 0;
 let currentPlayingAudio = null;
@@ -67,7 +69,14 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+    const newContent = document.getElementById(`tab-${btn.dataset.tab}`);
+    newContent.classList.add('active');
+    
+    animate(newContent,
+      { opacity: [0, 1], y: [10, 0] },
+      { type: 'spring', bounce: 0, duration: 0.3 }
+    );
+
     if (btn.dataset.tab === 'historia') loadHistory();
     if (btn.dataset.tab === 'papelera') loadTrash();
   });
@@ -76,6 +85,20 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // -------------------------------------------------------------- char cnt --
 els.textInput.addEventListener('input', () => {
   els.charCount.textContent = `${els.textInput.value.length} caracteres`;
+});
+
+els.textInput.addEventListener('focus', () => {
+  animate(els.textInput, 
+    { boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.15)' },
+    { type: 'spring', duration: 0.4 }
+  );
+});
+
+els.textInput.addEventListener('blur', () => {
+  animate(els.textInput, 
+    { boxShadow: '0 0 0 0px rgba(99, 102, 241, 0)' },
+    { type: 'spring', duration: 0.3 }
+  );
 });
 
 // ------------------------------------------------------------------ modal --
@@ -88,8 +111,17 @@ function showConfirmModal({ title, message, confirmText, isDanger = true, onConf
   okBtn.className = `modal-btn ${isDanger ? 'danger-btn' : 'secondary-btn'}`;
 
   modal.classList.remove('hidden');
+  const modalBox = modal.querySelector('.modal-card');
+  animate(modal, { opacity: [0, 1] }, { duration: 0.2 });
+  animate(modalBox, { y: [12, 0], opacity: [0, 1] }, { type: "spring", bounce: 0, duration: 0.3 });
 
-  const close = () => modal.classList.add('hidden');
+  const close = () => {
+    animate(modal, { opacity: 0 }, { duration: 0.2 });
+    animate(modalBox, { y: 12, opacity: 0 }, { 
+      type: "spring", bounce: 0, duration: 0.3,
+      onComplete: () => modal.classList.add('hidden')
+    });
+  };
 
   const handleOk = async () => {
     close();
@@ -197,10 +229,18 @@ function openDetailsModal(entry) {
   };
   
   els.detailsModal.classList.remove('hidden');
+  const detailsBox = els.detailsModal.querySelector('.detail-modal-card');
+  animate(els.detailsModal, { opacity: [0, 1] }, { duration: 0.2 });
+  animate(detailsBox, { y: [12, 0], opacity: [0, 1] }, { type: "spring", bounce: 0, duration: 0.3 });
 }
 
 els.detailsModalCloseBtn.addEventListener('click', () => {
-  els.detailsModal.classList.add('hidden');
+  const detailsBox = els.detailsModal.querySelector('.detail-modal-card');
+  animate(els.detailsModal, { opacity: 0 }, { duration: 0.2 });
+  animate(detailsBox, { y: 12, opacity: 0 }, { 
+    type: "spring", bounce: 0, duration: 0.3,
+    onComplete: () => els.detailsModal.classList.add('hidden')
+  });
   if (modalAudio) {
     modalAudio.pause();
     modalAudio = null;
@@ -347,8 +387,14 @@ function setupAutoSave() {
   els.volumeRange.addEventListener('change', saveFunc);
   els.normalizeToggle.addEventListener('change', saveFunc);
   
-  els.speedRange.addEventListener('input', () => { els.speedVal.textContent = `${els.speedRange.value}x`; });
-  els.volumeRange.addEventListener('input', () => { els.volumeVal.textContent = els.volumeRange.value; });
+  els.speedRange.addEventListener('input', (e) => { 
+    els.speedVal.textContent = `${e.target.value}x`; 
+    if (currentPlayingAudio) currentPlayingAudio.playbackRate = parseFloat(e.target.value);
+    if (modalAudio) modalAudio.playbackRate = parseFloat(e.target.value);
+  });
+  els.volumeRange.addEventListener('input', (e) => { 
+    els.volumeVal.textContent = e.target.value; 
+  });
 }
 
 // ------------------------------------------------------------- generate --
@@ -486,6 +532,15 @@ function renderAudioCard(entry) {
     openDetailsModal(entry);
   });
 
+  // Hover: elevar + sombra dinámica
+  card.addEventListener('pointerenter', () => {
+    animate(card, { y: -2, boxShadow: '0 8px 20px rgba(0,0,0,0.3)' }, { type: 'spring', bounce: 0.1, duration: 0.3 });
+  });
+
+  card.addEventListener('pointerleave', () => {
+    animate(card, { y: 0, boxShadow: 'var(--shadow)' }, { type: 'spring', bounce: 0.1, duration: 0.3 });
+  });
+
   // Evitar propagación en botones
   const playBtn = card.querySelector('.card-play-btn');
   const downloadBtn = card.querySelector('.card-download-btn');
@@ -615,8 +670,16 @@ function updateQueueBadge() {
   if (activeJobsCount > 0) {
     els.queueBadge.classList.remove('hidden');
     els.queueBadge.textContent = `${activeJobsCount} en curso`;
+    if (!els.queueBadge.dataset.animating) {
+      els.queueBadge.dataset.animating = "true";
+      animate(els.queueBadge,
+        { scale: [1, 1.05, 1], opacity: [1, 0.7, 1] },
+        { type: 'spring', bounce: 0.4, duration: 2, repeat: Infinity }
+      );
+    }
   } else {
     els.queueBadge.classList.add('hidden');
+    els.queueBadge.dataset.animating = "";
   }
 }
 

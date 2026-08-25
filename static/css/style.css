@@ -94,6 +94,18 @@ body {
 .status-dot.status-ok {
   background: var(--success);
   box-shadow: 0 0 6px var(--success);
+  animation: pulse-dot 2s infinite ease-in-out;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { 
+    opacity: 1;
+    box-shadow: 0 0 6px var(--success);
+  }
+  50% { 
+    opacity: 0.8;
+    box-shadow: 0 0 12px var(--success);
+  }
 }
 
 .status-dot.status-bad {
@@ -216,7 +228,7 @@ textarea#textInput {
   font-size: 14.5px;
   line-height: 1.5;
   color: var(--text);
-  transition: border-color 0.15s ease;
+  box-shadow: 0 0 0 0px rgba(99, 102, 241, 0);
 }
 
 textarea#textInput:focus {
@@ -292,19 +304,12 @@ textarea#textInput::placeholder {
   border: 1px solid rgba(251, 191, 36, 0.15);
   padding: 4px 10px;
   border-radius: 20px;
-  animation: pulse-badge 2s infinite ease-in-out;
 }
 
 .queue-badge.max-reached {
   color: var(--danger);
   background: rgba(239, 68, 68, 0.1);
   border-color: rgba(239, 68, 68, 0.15);
-  animation: none;
-}
-
-@keyframes pulse-badge {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
 }
 
 /* ------------------------------------------------------ results section -- */
@@ -882,12 +887,6 @@ textarea#textInput::placeholder {
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  animation: fadeIn 0.15s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 .modal-card {
@@ -898,12 +897,6 @@ textarea#textInput::placeholder {
   width: 90%;
   max-width: 380px;
   padding: 20px;
-  animation: slideUp 0.15s ease-out;
-}
-
-@keyframes slideUp {
-  from { transform: translateY(12px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
 }
 
 .modal-header {
@@ -973,7 +966,6 @@ textarea#textInput::placeholder {
   max-width: 540px;
   padding: 20px;
   border: 1px solid var(--border);
-  animation: slideUp 0.15s ease-out;
   display: flex;
   flex-direction: column;
   gap: 14px;
