@@ -27,10 +27,11 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font: 100%/1.5 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   font-size: 13.5px;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  font-optical-sizing: auto;
 }
 
 .hidden {
@@ -44,8 +45,13 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: rgba(30, 30, 32, 0.7);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 .brand {
@@ -120,15 +126,17 @@ body {
 }
 
 .side-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: rgba(30, 30, 32, 0.6);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 96px);
   position: sticky;
-  top: 20px;
+  top: 76px; /* Account for topbar */
 }
 
 /* Section Header styling like in image */
@@ -143,6 +151,7 @@ body {
   font-size: 15px;
   font-weight: 600;
   color: #ffffff;
+  letter-spacing: -0.01em;
 }
 
 /* -------------------------------------------------------------- editor -- */
@@ -256,7 +265,8 @@ textarea#textInput::placeholder {
 }
 
 .generate-btn:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
+  transition: transform 100ms ease-out;
 }
 
 .generate-btn:disabled {
@@ -413,7 +423,7 @@ textarea#textInput::placeholder {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
   text-decoration: none;
 }
 
@@ -421,6 +431,11 @@ textarea#textInput::placeholder {
   background: #2d2d34;
   border-color: #4b4b52;
   color: #ffffff;
+}
+
+.audio-card-btn:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease-out;
 }
 
 .audio-card-btn.icon-only {
@@ -692,6 +707,11 @@ textarea#textInput::placeholder {
   background: var(--accent-hover);
 }
 
+.mini-btn:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease-out;
+}
+
 .hint {
   font-size: 11px;
   color: var(--text-muted);
@@ -812,6 +832,12 @@ textarea#textInput::placeholder {
   border-color: #4b4b52;
 }
 
+.history-item-actions button:active,
+.history-item-actions a:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease-out;
+}
+
 .trash-header {
   display: flex;
   align-items: center;
@@ -921,7 +947,12 @@ textarea#textInput::placeholder {
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.modal-btn:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease-out;
 }
 
 .secondary-btn {
@@ -1021,6 +1052,11 @@ textarea#textInput::placeholder {
   background: var(--accent-hover);
 }
 
+.detail-play-btn:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease-out;
+}
+
 .detail-slider {
   flex: 1;
   accent-color: var(--accent);
@@ -1030,4 +1066,22 @@ textarea#textInput::placeholder {
   font-family: monospace;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+/* -------------------------------------------------- accessibility -- */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .topbar, .side-panel, .modal-overlay {
+    background: var(--surface) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
 }
