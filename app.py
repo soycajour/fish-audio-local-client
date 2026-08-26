@@ -206,6 +206,7 @@ def restore_from_trash(entry_id):
 def permanent_delete(entry_id):
     trash = load_trash()
     entry = next((t for t in trash if t["id"] == entry_id), None)
+    
     if entry:
         audio_path = AUDIO_DIR / entry["filename"]
         if audio_path.exists():
@@ -215,6 +216,20 @@ def permanent_delete(entry_id):
                 pass
         trash = [t for t in trash if t["id"] != entry_id]
         save_json(TRASH_PATH, trash)
+    else:
+        # Check if it is in history (e.g. failed items being permanently deleted)
+        history = load_history()
+        entry_hist = next((h for h in history if h["id"] == entry_id), None)
+        if entry_hist:
+            audio_path = AUDIO_DIR / entry_hist["filename"]
+            if audio_path.exists():
+                try:
+                    audio_path.unlink()
+                except OSError:
+                    pass
+            history = [h for h in history if h["id"] != entry_id]
+            save_json(HISTORY_PATH, history)
+
     return jsonify({"ok": True})
 
 
