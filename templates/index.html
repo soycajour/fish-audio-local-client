@@ -29,12 +29,37 @@
     <!-- Editor Card -->
     <div class="editor-card">
       <div class="editor-toolbar">
-        <div class="voice-picker">
-          <label for="voiceSelect">Voz</label>
+        
+        <!-- Selector de Proyecto -->
+        <div class="toolbar-group">
+          <label for="projectSelect">📁 Proyecto</label>
+          <div class="select-with-btn">
+            <select id="projectSelect">
+              <!-- Cargado dinámicamente -->
+            </select>
+            <button id="newProjectBtn" class="toolbar-icon-btn" title="Nuevo proyecto">+</button>
+          </div>
+        </div>
+
+        <!-- Selector de Parte -->
+        <div class="toolbar-group">
+          <label for="partSelect">📑 Parte</label>
+          <div class="select-with-btn">
+            <select id="partSelect">
+              <!-- Cargado dinámicamente según el proyecto -->
+            </select>
+            <button id="newPartBtn" class="toolbar-icon-btn" title="Nueva parte">+</button>
+          </div>
+        </div>
+
+        <!-- Selector de Voz -->
+        <div class="toolbar-group">
+          <label for="voiceSelect">🎙️ Voz</label>
           <select id="voiceSelect">
-            <!-- Cargado dinámicamente: solo voces agregadas por el usuario -->
+            <!-- Cargado dinámicamente -->
           </select>
         </div>
+
       </div>
 
       <textarea id="textInput" placeholder="Escribe o pega el texto que quieres convertir en voz…"></textarea>
@@ -54,14 +79,17 @@
     <!-- Audios Generados (Historia de la generación) -->
     <div id="resultsSection" class="results-section">
       <div class="section-header">
-        <h3>Historia de la generación</h3>
+        <div class="section-header-left">
+          <h3>Historia de la generación</h3>
+          <span id="currentScopeBadge" class="scope-badge">General / Parte 1</span>
+        </div>
         <span id="audioCountBadge" class="audio-count-badge">0</span>
       </div>
       
       <div id="audioCardsContainer" class="audio-cards-container">
         <div id="resultsEmpty" class="results-empty">
           <span class="empty-icon">🎧</span>
-          <p>Los audios que generes se irán acumulando aquí abajo en orden de creación.</p>
+          <p>Los audios que generes para esta parte se irán acumulando aquí en orden consecutivo (#1, #2, #3...).</p>
         </div>
       </div>
     </div>
@@ -72,7 +100,7 @@
         <h3>Biblioteca My Voice</h3>
       </div>
       <div id="libraryList" class="library-list">
-        <!-- Voces del usuario renderizadas con estilo premium de tarjeta -->
+        <!-- Voces del usuario renderizadas con estilo de tarjeta -->
       </div>
     </div>
 
@@ -181,6 +209,14 @@
     
     <div class="detail-grid">
       <div class="detail-item">
+        <span class="detail-item-label">Proyecto / Parte</span>
+        <span id="detailProjectValue" class="detail-item-value">-</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-item-label">Orden en la parte</span>
+        <span id="detailOrderValue" class="detail-item-value">-</span>
+      </div>
+      <div class="detail-item">
         <span class="detail-item-label">Modelo</span>
         <span id="detailModelValue" class="detail-item-value">-</span>
       </div>
@@ -214,6 +250,42 @@
       <button id="detailCopyBtn" class="modal-btn secondary-btn">📋 Copiar texto</button>
       <a id="detailDownloadBtn" href="" download class="modal-btn secondary-btn" style="text-decoration: none; text-align: center; display: inline-block;">⬇ Descargar</a>
       <button id="detailDeleteBtn" class="modal-btn danger-btn">🗑 Papelera</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para Crear Proyecto -->
+<div id="projectModal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <span>📁 Nuevo Proyecto</span>
+      <button id="projectModalCloseBtn" class="modal-close-btn">✕</button>
+    </div>
+    <div class="field-group" style="margin-bottom: 16px;">
+      <label for="newProjectNameInput">Nombre del proyecto</label>
+      <input id="newProjectNameInput" type="text" placeholder="Ej: Audiolibro Capítulo 1, Video YouTube..." autofocus>
+    </div>
+    <div class="modal-actions">
+      <button id="projectModalCancelBtn" class="modal-btn secondary-btn">Cancelar</button>
+      <button id="projectModalSaveBtn" class="modal-btn primary-btn">Crear proyecto</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para Crear Parte -->
+<div id="partModal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <span>📑 Nueva Parte</span>
+      <button id="partModalCloseBtn" class="modal-close-btn">✕</button>
+    </div>
+    <div class="field-group" style="margin-bottom: 16px;">
+      <label for="newPartNameInput">Nombre de la parte / sección</label>
+      <input id="newPartNameInput" type="text" placeholder="Ej: Parte 2, Introducción, Escena 1...">
+    </div>
+    <div class="modal-actions">
+      <button id="partModalCancelBtn" class="modal-btn secondary-btn">Cancelar</button>
+      <button id="partModalSaveBtn" class="modal-btn primary-btn">Crear parte</button>
     </div>
   </div>
 </div>

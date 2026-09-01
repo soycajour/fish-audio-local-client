@@ -9,11 +9,14 @@ Sin suscripciones intermedias ni límites de plataforma: utiliza directamente tu
 ## ✨ Características principales
 
 - 🚀 **Ejecución en 1 solo clic:** Scripts de inicio automático para Windows (`iniciar.bat`) y Linux/macOS (`start.sh`).
+- 📁 **Organización por Proyectos y Partes:** Estructura tus audios en proyectos (ej. *Audiolibro 1*, *Video YouTube*) y subsecciones/partes (*Parte 1*, *Parte 2*...).
+- 🔢 **Numeración Consecutiva Automática:** Cada audio generado dentro de una parte se numera ordenadamente (`#1`, `#2`, `#3`...) facilitando el ensamblaje posterior.
 - ⚡ **Generación asíncrona y por lotes:** Procesa múltiples solicitudes en segundo plano con soporte para cancelación y límites concurrentes.
 - 🧩 **Smart Chunking:** Divide automáticamente textos largos en párrafos y oraciones respetando la prosodia y concatenando el audio final con `pydub`.
 - 🎙️ **Gestor de Biblioteca de Voces:** Agrega y administra tus voces clonadas o predeterminadas mediante su `reference_id`.
 - 🎛️ **Controles de Prosodia:** Ajusta formato (`MP3`, `WAV`, `OPUS`), velocidad de habla, volumen y normalización de texto.
-- 🗂️ **Historial y Papelera:** Historial cronológico con reproductor integrado, descarga directa, modal de detalles extendido y papelera con soporte de restauración.
+- 🗂️ **Historial y Papelera:** Historial ordenado con reproductor integrado, scrubbing con barra de tiempo, descarga directa, modal de detalles y papelera con restauración.
+- 📦 **Compilación a `.EXE`:** Script `build_exe.bat` incluido para compilar un ejecutable independiente de Windows con ícono personalizado.
 - 🔒 **Privacidad Total:** Tu clave de API y archivos generados se almacenan únicamente en tu máquina local (`data/` y `static/audio/`).
 
 ---
@@ -36,6 +39,21 @@ chmod +x start.sh
 
 ---
 
+## 📦 Compilar a archivo ejecutable `.EXE` (Windows)
+
+Para generar una versión independiente (`FishAudioLocal.exe`) que no requiere Python en la máquina destino:
+
+1. Ejecuta:
+   ```bat
+   build_exe.bat
+   ```
+2. Al finalizar, tu aplicación compilada estará lista en la carpeta:
+   ```text
+   dist/FishAudioLocal/FishAudioLocal.exe
+   ```
+
+---
+
 ## ⚙️ Configuración
 
 1. **Obtener API Key:** Ve a [fish.audio](https://fish.audio) → sección **API Keys** y copia tu clave.
@@ -47,6 +65,7 @@ chmod +x start.sh
 ## ⌨️ Atajos de Teclado
 
 - `Ctrl + Enter` (o `Cmd + Enter` en Mac): Genera el discurso del texto actual inmediatamente.
+- `Escape`: Cierra rápidamente cualquier ventana modal o menú emergente.
 
 ---
 
@@ -58,19 +77,22 @@ fish-audio-local/
 ├── requirements.txt           # Dependencias de Python (Flask, requests, pydub)
 ├── iniciar.bat                # Lanzador automatizado para Windows
 ├── start.sh                   # Lanzador automatizado para Linux/macOS/WSL
+├── build_exe.bat              # Script de compilación a ejecutable EXE (PyInstaller)
+├── app_icon.ico               # Ícono oficial de la aplicación
 ├── templates/
 │   └── index.html             # Interfaz web principal
 ├── static/
 │   ├── css/
-│   │   └── style.css          # Estilos modernos y responsivos
+│   │   └── style.css          # Estilos modernos y fluidos
 │   ├── js/
-│   │   └── app.js             # Lógica cliente, reproductor, llamadas API y animaciones
+│   │   └── app.js             # Lógica cliente, proyectos, partes, reproductor y modales
 │   └── audio/                 # Directorio de salida para los audios generados
 ├── data/                      # Datos locales (ignorado por Git por seguridad)
-│   ├── config.json            # Clave de API y configuración de voces
+│   ├── config.json            # Clave de API y configuración
+│   ├── projects.json          # Proyectos y partes
 │   ├── history.json           # Registro del historial de generaciones
 │   └── trash.json             # Elementos en papelera
-└── docs/                      # Documentación y guías de diseño
+└── docs/                      # Documentación y guías
 ```
 
 ---

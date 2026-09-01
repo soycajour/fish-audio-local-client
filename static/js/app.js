@@ -9,6 +9,14 @@ let pollingInterval = null;
 const els = {
   apiStatusDot: document.getElementById('apiStatusDot'),
   apiStatusText: document.getElementById('apiStatusText'),
+
+  // Proyecto y Partes
+  projectSelect: document.getElementById('projectSelect'),
+  newProjectBtn: document.getElementById('newProjectBtn'),
+  partSelect: document.getElementById('partSelect'),
+  newPartBtn: document.getElementById('newPartBtn'),
+  currentScopeBadge: document.getElementById('currentScopeBadge'),
+
   textInput: document.getElementById('textInput'),
   charCount: document.getElementById('charCount'),
   generateBtn: document.getElementById('generateBtn'),
@@ -46,6 +54,8 @@ const els = {
   confirmModal: document.getElementById('confirmModal'),
   detailsModal: document.getElementById('detailsModal'),
   detailsModalCloseBtn: document.getElementById('detailsModalCloseBtn'),
+  detailProjectValue: document.getElementById('detailProjectValue'),
+  detailOrderValue: document.getElementById('detailOrderValue'),
   detailModelValue: document.getElementById('detailModelValue'),
   detailVoiceValue: document.getElementById('detailVoiceValue'),
   detailDateValue: document.getElementById('detailDateValue'),
@@ -57,11 +67,33 @@ const els = {
   detailCopyBtn: document.getElementById('detailCopyBtn'),
   detailDownloadBtn: document.getElementById('detailDownloadBtn'),
   detailDeleteBtn: document.getElementById('detailDeleteBtn'),
+
+  // Modales de Proyectos y Partes
+  projectModal: document.getElementById('projectModal'),
+  newProjectNameInput: document.getElementById('newProjectNameInput'),
+  projectModalSaveBtn: document.getElementById('projectModalSaveBtn'),
+  projectModalCancelBtn: document.getElementById('projectModalCancelBtn'),
+  projectModalCloseBtn: document.getElementById('projectModalCloseBtn'),
+
+  partModal: document.getElementById('partModal'),
+  newPartNameInput: document.getElementById('newPartNameInput'),
+  partModalSaveBtn: document.getElementById('partModalSaveBtn'),
+  partModalCancelBtn: document.getElementById('partModalCancelBtn'),
+  partModalCloseBtn: document.getElementById('partModalCloseBtn'),
 };
 
-let state = { voices: [], hasApiKey: false, config: {} };
+let state = {
+  voices: [],
+  hasApiKey: false,
+  config: {},
+  projects: [],
+  activeProjectId: 'default',
+  activePartId: 'part-1',
+};
+
 let totalGeneratedAudios = 0;
 let modalAudio = null;
+let cardAudios = {};
 
 // ------------------------------------------------------------------ tabs --
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -70,12 +102,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
     const newContent = document.getElementById(`tab-${btn.dataset.tab}`);
-    newContent.classList.add('active');
-    
-    animate(newContent,
-      { opacity: [0, 1], y: [10, 0] },
-      { type: 'spring', bounce: 0, duration: 0.3 }
-    );
+    if (newContent) {
+      newContent.classList.add('active');
+      animate(newContent,
+        { opacity: [0, 1], y: [10, 0] },
+        { type: 'spring', bounce: 0, duration: 0.3 }
+      );
+    }
 
     if (btn.dataset.tab === 'historia') loadHistory();
     if (btn.dataset.tab === 'papelera') loadTrash();
@@ -101,7 +134,63 @@ els.textInput.addEventListener('blur', () => {
   );
 });
 
-// ------------------------------------------------------------------ modal --
+// ----------------------------------------------------------- modal generic --
+function setupModalClosing(modalEl, closeFunction) {
+  // Clic en el fondo oscuro (backdrop)
+  modalEl.addEventListener('click', (e) => {
+    if (e.target === modalEl) {
+      closeFunction();
+    }
+  });
+
+  // Evitar que clics dentro de la tarjeta se propaguen al backdrop
+  const card = modalEl.querySelector('.modal-card, .detail-modal-card');
+  if (card) {
+    card.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+  }
+}
+
+// Cierre global con la tecla Escape (Esc)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeActiveModals();
+  }
+});
+
+function closeActiveModals() {
+  if (els.confirmModal && !els.confirmModal.classList.contains('hidden')) {
+    closeConfirmModal();
+  }
+  if (els.detailsModal && !els.detailsModal.classList.contains('hidden')) {
+    closeDetailsModal();
+  }
+  if (els.projectModal && !els.projectModal.classList.contains('hidden')) {
+    closeProjectModal();
+  }
+  if (els.partModal && !els.partModal.classList.contains('hidden')) {
+    closePartModal();
+  }
+}
+
+// ----------------------------------------------------------- confirm modal --
+let confirmModalCleanup = null;
+
+function closeConfirmModal() {
+  const modal = els.confirmModal;
+  const modalBox = modal.querySelector('.modal-card');
+  animate(modal, { opacity: 0 }, { duration: 0.2 });
+  animate(modalBox, { y: 12, opacity: 0 }, { 
+    type: "spring", bounce: 0, duration: 0.3,
+    onComplete: () => modal.classList.add('hidden')
+  });
+  if (confirmModalCleanup) {
+    confirmModalCleanup();
+    confirmModalCleanup = null;
+  }
+}
+
 function showConfirmModal({ title, message, confirmText, isDanger = true, onConfirm }) {
   const modal = els.confirmModal;
   document.getElementById('confirmModalTitle').textContent = title || 'Confirmación';
@@ -115,46 +204,59 @@ function showConfirmModal({ title, message, confirmText, isDanger = true, onConf
   animate(modal, { opacity: [0, 1] }, { duration: 0.2 });
   animate(modalBox, { y: [12, 0], opacity: [0, 1] }, { type: "spring", bounce: 0, duration: 0.3 });
 
-  const close = () => {
-    animate(modal, { opacity: 0 }, { duration: 0.2 });
-    animate(modalBox, { y: 12, opacity: 0 }, { 
-      type: "spring", bounce: 0, duration: 0.3,
-      onComplete: () => modal.classList.add('hidden')
-    });
-  };
-
   const handleOk = async () => {
-    close();
-    cleanup();
+    closeConfirmModal();
     if (onConfirm) await onConfirm();
   };
 
   const handleCancel = () => {
-    close();
-    cleanup();
-  };
-
-  const cleanup = () => {
-    okBtn.removeEventListener('click', handleOk);
-    document.getElementById('confirmModalCancelBtn').removeEventListener('click', handleCancel);
-    document.getElementById('confirmModalCloseBtn').removeEventListener('click', handleCancel);
+    closeConfirmModal();
   };
 
   okBtn.addEventListener('click', handleOk);
   document.getElementById('confirmModalCancelBtn').addEventListener('click', handleCancel);
   document.getElementById('confirmModalCloseBtn').addEventListener('click', handleCancel);
+
+  confirmModalCleanup = () => {
+    okBtn.removeEventListener('click', handleOk);
+    document.getElementById('confirmModalCancelBtn').removeEventListener('click', handleCancel);
+    document.getElementById('confirmModalCloseBtn').removeEventListener('click', handleCancel);
+  };
 }
 
+setupModalClosing(els.confirmModal, closeConfirmModal);
+
 // ----------------------------------------------------------- details modal --
+function closeDetailsModal() {
+  const detailsBox = els.detailsModal.querySelector('.detail-modal-card');
+  animate(els.detailsModal, { opacity: 0 }, { duration: 0.2 });
+  animate(detailsBox, { y: 12, opacity: 0 }, { 
+    type: "spring", bounce: 0, duration: 0.3,
+    onComplete: () => els.detailsModal.classList.add('hidden')
+  });
+  if (modalAudio) {
+    modalAudio.pause();
+    modalAudio = null;
+  }
+}
+
 function openDetailsModal(entry) {
   if (modalAudio) {
     modalAudio.pause();
     modalAudio = null;
   }
+
+  // Nombre de proyecto y parte
+  const proj = state.projects.find(p => p.id === (entry.project_id || 'default'));
+  const projName = proj ? proj.name : 'General';
+  const part = proj && proj.parts ? proj.parts.find(p => p.id === (entry.part_id || 'part-1')) : null;
+  const partName = part ? part.name : 'Parte 1';
+
+  if (els.detailProjectValue) els.detailProjectValue.textContent = `${projName} / ${partName}`;
+  if (els.detailOrderValue) els.detailOrderValue.textContent = `#${entry.order_index || 1}`;
   
   els.detailModelValue.textContent = entry.model;
   
-  // Buscar nombre de la voz
   const voice = state.voices.find(v => v.reference_id === entry.reference_id);
   const voiceName = voice ? voice.name : 'Voz guardada';
   els.detailVoiceValue.textContent = voiceName;
@@ -162,13 +264,11 @@ function openDetailsModal(entry) {
   const date = new Date((entry.timestamp || Date.now() / 1000) * 1000);
   els.detailDateValue.textContent = date.toLocaleString();
   
-  // Config: formato, velocidad, volumen, normalización
   const configText = `Formato: ${entry.format.toUpperCase()} · Vel: ${entry.speed || '1.0'}x · Vol: ${entry.volume || '0'} · Normalización: ${entry.normalize !== false ? 'Sí' : 'No'}`;
   els.detailConfigValue.textContent = configText;
   
   els.detailTextValue.textContent = entry.text;
   
-  // Configurar audio player del modal
   const audioUrl = `/static/audio/${entry.filename}`;
   modalAudio = new Audio(audioUrl);
   
@@ -224,7 +324,7 @@ function openDetailsModal(entry) {
   els.detailDownloadBtn.download = entry.filename;
   
   els.detailDeleteBtn.onclick = () => {
-    els.detailsModal.classList.add('hidden');
+    closeDetailsModal();
     confirmMoveToTrash(entry.id, modalAudio);
   };
   
@@ -234,30 +334,195 @@ function openDetailsModal(entry) {
   animate(detailsBox, { y: [12, 0], opacity: [0, 1] }, { type: "spring", bounce: 0, duration: 0.3 });
 }
 
-els.detailsModalCloseBtn.addEventListener('click', () => {
-  const detailsBox = els.detailsModal.querySelector('.detail-modal-card');
-  animate(els.detailsModal, { opacity: 0 }, { duration: 0.2 });
-  animate(detailsBox, { y: 12, opacity: 0 }, { 
+els.detailsModalCloseBtn.addEventListener('click', closeDetailsModal);
+setupModalClosing(els.detailsModal, closeDetailsModal);
+
+// -------------------------------------------------- project & part modals --
+function openProjectModal() {
+  els.newProjectNameInput.value = '';
+  els.projectModal.classList.remove('hidden');
+  const card = els.projectModal.querySelector('.modal-card');
+  animate(els.projectModal, { opacity: [0, 1] }, { duration: 0.2 });
+  animate(card, { y: [12, 0], opacity: [0, 1] }, { type: "spring", bounce: 0, duration: 0.3 });
+  setTimeout(() => els.newProjectNameInput.focus(), 50);
+}
+
+function closeProjectModal() {
+  const card = els.projectModal.querySelector('.modal-card');
+  animate(els.projectModal, { opacity: 0 }, { duration: 0.2 });
+  animate(card, { y: 12, opacity: 0 }, { 
     type: "spring", bounce: 0, duration: 0.3,
-    onComplete: () => els.detailsModal.classList.add('hidden')
+    onComplete: () => els.projectModal.classList.add('hidden')
   });
-  if (modalAudio) {
-    modalAudio.pause();
-    modalAudio = null;
+}
+
+function openPartModal() {
+  const proj = state.projects.find(p => p.id === state.activeProjectId);
+  const nextPartNum = proj && proj.parts ? proj.parts.length + 1 : 2;
+  els.newPartNameInput.value = `Parte ${nextPartNum}`;
+  els.partModal.classList.remove('hidden');
+  const card = els.partModal.querySelector('.modal-card');
+  animate(els.partModal, { opacity: [0, 1] }, { duration: 0.2 });
+  animate(card, { y: [12, 0], opacity: [0, 1] }, { type: "spring", bounce: 0, duration: 0.3 });
+  setTimeout(() => {
+    els.newPartNameInput.focus();
+    els.newPartNameInput.select();
+  }, 50);
+}
+
+function closePartModal() {
+  const card = els.partModal.querySelector('.modal-card');
+  animate(els.partModal, { opacity: 0 }, { duration: 0.2 });
+  animate(card, { y: 12, opacity: 0 }, { 
+    type: "spring", bounce: 0, duration: 0.3,
+    onComplete: () => els.partModal.classList.add('hidden')
+  });
+}
+
+els.newProjectBtn.addEventListener('click', openProjectModal);
+els.projectModalCloseBtn.addEventListener('click', closeProjectModal);
+els.projectModalCancelBtn.addEventListener('click', closeProjectModal);
+setupModalClosing(els.projectModal, closeProjectModal);
+
+els.newPartBtn.addEventListener('click', openPartModal);
+els.partModalCloseBtn.addEventListener('click', closePartModal);
+els.partModalCancelBtn.addEventListener('click', closePartModal);
+setupModalClosing(els.partModal, closePartModal);
+
+els.projectModalSaveBtn.addEventListener('click', async () => {
+  const name = els.newProjectNameInput.value.trim();
+  if (!name) return;
+  const res = await fetchJSON('/api/projects', 'POST', { name });
+  if (res && res.project) {
+    state.projects = res.projects;
+    state.activeProjectId = res.project.id;
+    state.activePartId = res.project.parts[0].id;
+    renderProjects();
+    await saveActiveProjectScope();
+    await loadInitialResults();
+    closeProjectModal();
   }
+});
+
+els.newProjectNameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') els.projectModalSaveBtn.click();
+});
+
+els.partModalSaveBtn.addEventListener('click', async () => {
+  const name = els.newPartNameInput.value.trim();
+  const res = await fetchJSON(`/api/projects/${state.activeProjectId}/parts`, 'POST', { name });
+  if (res && res.part) {
+    state.projects = res.projects;
+    state.activePartId = res.part.id;
+    renderParts();
+    updateScopeBadge();
+    await saveActiveProjectScope();
+    await loadInitialResults();
+    closePartModal();
+  }
+});
+
+els.newPartNameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') els.partModalSaveBtn.click();
+});
+
+// ------------------------------------------------- projects & parts logic --
+function renderProjects() {
+  els.projectSelect.innerHTML = '';
+  state.projects.forEach(proj => {
+    const opt = document.createElement('option');
+    opt.value = proj.id;
+    opt.textContent = proj.name;
+    els.projectSelect.appendChild(opt);
+  });
+
+  // Asegurar selección válida
+  if (!state.projects.some(p => p.id === state.activeProjectId) && state.projects.length > 0) {
+    state.activeProjectId = state.projects[0].id;
+  }
+  els.projectSelect.value = state.activeProjectId;
+  renderParts();
+  updateScopeBadge();
+}
+
+function renderParts() {
+  els.partSelect.innerHTML = '';
+  const currentProj = state.projects.find(p => p.id === state.activeProjectId);
+  const parts = currentProj ? currentProj.parts : [{ id: 'part-1', name: 'Parte 1' }];
+
+  parts.forEach(part => {
+    const opt = document.createElement('option');
+    opt.value = part.id;
+    opt.textContent = part.name;
+    els.partSelect.appendChild(opt);
+  });
+
+  if (!parts.some(p => p.id === state.activePartId) && parts.length > 0) {
+    state.activePartId = parts[0].id;
+  }
+  els.partSelect.value = state.activePartId;
+  updateScopeBadge();
+}
+
+function updateScopeBadge() {
+  const currentProj = state.projects.find(p => p.id === state.activeProjectId);
+  const projName = currentProj ? currentProj.name : 'General';
+  const currentPart = currentProj && currentProj.parts ? currentProj.parts.find(p => p.id === state.activePartId) : null;
+  const partName = currentPart ? currentPart.name : 'Parte 1';
+  if (els.currentScopeBadge) {
+    els.currentScopeBadge.textContent = `${projName} / ${partName}`;
+  }
+}
+
+async function saveActiveProjectScope() {
+  await fetchJSON('/api/config', 'POST', {
+    active_project_id: state.activeProjectId,
+    active_part_id: state.activePartId
+  });
+}
+
+els.projectSelect.addEventListener('change', async (e) => {
+  state.activeProjectId = e.target.value;
+  const proj = state.projects.find(p => p.id === state.activeProjectId);
+  if (proj && proj.parts && proj.parts.length > 0) {
+    state.activePartId = proj.parts[0].id;
+  } else {
+    state.activePartId = 'part-1';
+  }
+  renderParts();
+  updateScopeBadge();
+  await saveActiveProjectScope();
+  await loadInitialResults();
+});
+
+els.partSelect.addEventListener('change', async (e) => {
+  state.activePartId = e.target.value;
+  updateScopeBadge();
+  await saveActiveProjectScope();
+  await loadInitialResults();
 });
 
 // ------------------------------------------------------------------ init --
 async function init() {
-  const cfg = await fetchJSON('/api/config');
+  const [cfg, projects] = await Promise.all([
+    fetchJSON('/api/config'),
+    fetchJSON('/api/projects')
+  ]);
+
   state.hasApiKey = cfg.has_api_key;
   state.voices = cfg.voices || [];
   state.config = cfg;
-  
+  state.projects = projects && projects.length > 0 ? projects : [
+    { id: 'default', name: 'General', parts: [{ id: 'part-1', name: 'Parte 1' }] }
+  ];
+
+  state.activeProjectId = cfg.active_project_id || (state.projects[0] ? state.projects[0].id : 'default');
+  state.activePartId = cfg.active_part_id || 'part-1';
+
   updateApiStatus();
   renderVoices();
-  
-  // Cargar configuraciones guardadas
+  renderProjects();
+
   if (cfg.format) els.formatSelect.value = cfg.format;
   if (cfg.speed) {
     els.speedRange.value = cfg.speed;
@@ -271,8 +536,6 @@ async function init() {
 
   await loadInitialResults();
   await loadTrash();
-  
-  // Configurar listeners de auto-guardado
   setupAutoSave();
 }
 
@@ -289,18 +552,15 @@ function updateApiStatus() {
 // ------------------------------------------------------------- voices --
 function renderVoices() {
   els.voiceList.innerHTML = '';
-  els.voiceSelect.innerHTML = ''; // Limpiamos opciones
+  els.voiceSelect.innerHTML = '';
   
   state.voices.forEach((v, i) => {
-    // Generar avatars y datos ficticios basados en nombre para visuales premium
     const initials = v.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
     const isFemale = v.name.toLowerCase().includes('narradora') || v.name.toLowerCase().includes('marly') || v.name.toLowerCase().includes('sakura');
-    const genderTag = isFemale ? 'female' : 'male';
     const tagColor = isFemale ? '🎀 femenino' : '👔 masculino';
     const description = isFemale ? 'Una voz femenina joven y persuasiva, ideal para presentar temas sociales con claridad y convicción.'
                                  : 'Una voz masculina joven y segura, ideal para narrar conceptos creativos y educativos con un tono inspirador.';
 
-    // Agregar al panel Biblioteca
     const libraryCard = document.createElement('div');
     libraryCard.className = 'library-item';
     libraryCard.innerHTML = `
@@ -325,14 +585,12 @@ function renderVoices() {
     });
     els.voiceList.appendChild(libraryCard);
 
-    // Agregar al Select del Editor
     const opt = document.createElement('option');
     opt.value = v.reference_id;
     opt.textContent = v.name;
     els.voiceSelect.appendChild(opt);
   });
   
-  // Seleccionar la primera voz por defecto si existe
   if (state.voices.length > 0 && !els.voiceSelect.value) {
     els.voiceSelect.value = state.voices[0].reference_id;
   }
@@ -366,7 +624,6 @@ els.saveKeyBtn.addEventListener('click', async () => {
   updateApiStatus();
 });
 
-// Auto-save settings on inputs change
 function setupAutoSave() {
   const saveFunc = async () => {
     const format = els.formatSelect.value;
@@ -416,12 +673,13 @@ async function generate() {
     speed: parseFloat(els.speedRange.value),
     volume: parseFloat(els.volumeRange.value),
     normalize: els.normalizeToggle.checked,
+    project_id: state.activeProjectId,
+    part_id: state.activePartId,
   };
 
   activeJobsCount++;
   if (els.resultsEmpty) els.resultsEmpty.classList.add('hidden');
 
-  // Limpiar caja de texto para permitir redactar el siguiente párrafo inmediatamente
   els.textInput.value = '';
   els.charCount.textContent = '0 caracteres';
 
@@ -437,7 +695,6 @@ async function generate() {
       showError(data.error || 'Error al enviar petición al servidor.');
       activeJobsCount--;
     } else {
-      // Iniciar el sondeo porque el audio se está generando en segundo plano en el servidor
       startPolling();
     }
   } catch (err) {
@@ -477,13 +734,10 @@ function createPendingCard(entry) {
   const cancelBtn = card.querySelector('.cancel-btn');
   cancelBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
-    
-    // Animate button scale for active state manually if we want, or rely on CSS
     animate(cancelBtn, { scale: 0.9 }, { type: "spring", duration: 0.2 });
-    
     try {
       await fetch(`/api/generate/${entry.id}/cancel`, { method: 'POST' });
-      cancelBtn.textContent = '⏳'; // Feedback visual
+      cancelBtn.textContent = '⏳';
     } catch (err) {
       console.error('Error al cancelar:', err);
     }
@@ -522,14 +776,15 @@ function renderAudioCard(entry) {
   const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const audioUrl = `/static/audio/${entry.filename}`;
   
-  // Buscar voz
   const voice = state.voices.find(v => v.reference_id === entry.reference_id);
   const voiceName = voice ? voice.name : 'Voz guardada';
   const initials = voiceName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  const orderNum = entry.order_index || 1;
 
   card.innerHTML = `
     <div class="audio-card-header">
       <div class="audio-card-meta">
+        <span class="audio-card-badge-order">#${orderNum}</span>
         <div class="audio-card-avatar">${initials}</div>
         <span class="audio-card-voice">${escapeHtml(voiceName)}</span>
         <span class="audio-card-time">${timeStr}</span>
@@ -537,19 +792,16 @@ function renderAudioCard(entry) {
       <div class="audio-card-actions">
         <button class="audio-card-btn card-play-btn">▶ Reproducir</button>
         <button class="audio-card-btn card-download-btn">⬇ Descargar</button>
-        <button class="audio-card-btn icon-only card-share-btn" title="Copiar enlace">🔗</button>
         <button class="audio-card-btn icon-only card-delete-btn" title="Mover a la papelera">🗑</button>
       </div>
     </div>
     <div class="audio-card-text">${escapeHtml(entry.text)}</div>
   `;
 
-  // Listener para el popup suave
-  card.addEventListener('click', (e) => {
+  card.addEventListener('click', () => {
     openDetailsModal(entry);
   });
 
-  // Hover: elevar + sombra dinámica
   card.addEventListener('pointerenter', () => {
     animate(card, { y: -2, boxShadow: '0 8px 20px rgba(0,0,0,0.3)' }, { type: 'spring', bounce: 0.1, duration: 0.3 });
   });
@@ -558,10 +810,8 @@ function renderAudioCard(entry) {
     animate(card, { y: 0, boxShadow: 'var(--shadow)' }, { type: 'spring', bounce: 0.1, duration: 0.3 });
   });
 
-  // Evitar propagación en botones
   const playBtn = card.querySelector('.card-play-btn');
   const downloadBtn = card.querySelector('.card-download-btn');
-  const shareBtn = card.querySelector('.card-share-btn');
   const deleteBtn = card.querySelector('.card-delete-btn');
 
   playBtn.addEventListener('click', (e) => {
@@ -579,13 +829,6 @@ function renderAudioCard(entry) {
     document.body.removeChild(a);
   });
 
-  shareBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(window.location.origin + audioUrl);
-    shareBtn.textContent = '✓';
-    setTimeout(() => { shareBtn.textContent = '🔗'; }, 2000);
-  });
-
   deleteBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     confirmMoveToTrash(entry.id);
@@ -593,8 +836,6 @@ function renderAudioCard(entry) {
 
   return card;
 }
-
-let cardAudios = {};
 
 function togglePlayCard(entry, btn) {
   const url = `/static/audio/${entry.filename}`;
@@ -607,7 +848,6 @@ function togglePlayCard(entry, btn) {
   
   const audio = cardAudios[entry.id];
   if (audio.paused) {
-    // Pausar cualquier otro que esté sonando
     if (currentPlayingAudio && currentPlayingAudio !== audio) {
       currentPlayingAudio.pause();
       if (currentPlayingBtn) currentPlayingBtn.textContent = '▶ Reproducir';
@@ -624,12 +864,17 @@ function togglePlayCard(entry, btn) {
   }
 }
 
-// ---------------------------------------------------- initial results --
+// ---------------------------------------------------- results loader --
 async function loadInitialResults() {
   const history = await fetchJSON('/api/history');
   els.audioCardsContainer.innerHTML = '';
 
-  const activeHistory = history.filter(item => !item.trashed_at);
+  // Filtrar exclusivamente para el proyecto y parte actualmente activos
+  const activeHistory = history.filter(item => 
+    !item.trashed_at && 
+    (item.project_id || 'default') === state.activeProjectId &&
+    (item.part_id || 'part-1') === state.activePartId
+  );
 
   if (!activeHistory || activeHistory.length === 0) {
     if (els.resultsEmpty) els.resultsEmpty.classList.remove('hidden');
@@ -642,13 +887,12 @@ async function loadInitialResults() {
   totalGeneratedAudios = activeHistory.length;
   updateAudioCountBadge();
 
-  // Renderizar al revés para que los más nuevos aparezcan arriba
+  // Renderizar de más nuevo a más viejo para que aparezca arriba el último generado
   activeHistory.slice().reverse().forEach((item) => {
     const cardEl = renderAudioCard(item);
     els.audioCardsContainer.appendChild(cardEl);
   });
 
-  // Comprobar si hay elementos pendientes para arrancar el polling
   const hasPending = activeHistory.some(h => h.status === 'pending');
   if (hasPending) {
     startPolling();
@@ -660,13 +904,16 @@ function startPolling() {
   if (pollingInterval) return;
   pollingInterval = setInterval(async () => {
     const history = await fetchJSON('/api/history');
-    const activeHistory = history.filter(item => !item.trashed_at);
+    const activeHistory = history.filter(item => 
+      !item.trashed_at && 
+      (item.project_id || 'default') === state.activeProjectId &&
+      (item.part_id || 'part-1') === state.activePartId
+    );
     
     const pendingJobs = activeHistory.filter(h => h.status === 'pending');
     activeJobsCount = pendingJobs.length;
     updateQueueBadge();
 
-    // Re-renderizar lista
     els.audioCardsContainer.innerHTML = '';
     activeHistory.slice().reverse().forEach((item) => {
       const cardEl = renderAudioCard(item);
@@ -719,9 +966,14 @@ async function loadHistory() {
     const date = new Date(item.timestamp * 1000);
     const timeLabel = date.toLocaleString();
 
+    const proj = state.projects.find(p => p.id === (item.project_id || 'default'));
+    const projName = proj ? proj.name : 'General';
+    const part = proj && proj.parts ? proj.parts.find(p => p.id === (item.part_id || 'part-1')) : null;
+    const partName = part ? part.name : 'Parte 1';
+
     div.innerHTML = `
       <div class="history-item-top">
-        <span class="history-item-time">#${activeHistory.length - idx} · ${timeLabel}</span>
+        <span class="history-item-time">#${item.order_index || activeHistory.length - idx} · ${projName} (${partName}) · ${timeLabel}</span>
       </div>
       <div class="history-item-text">${escapeHtml(item.text)}</div>
       <div class="history-item-actions">
@@ -802,9 +1054,7 @@ function confirmMoveToTrash(entryId, audioObj) {
     confirmText: 'Mover a la papelera',
     isDanger: true,
     onConfirm: async () => {
-      if (audioObj) {
-        audioObj.pause();
-      }
+      if (audioObj) audioObj.pause();
       if (currentPlayingAudio) {
         currentPlayingAudio.pause();
         currentPlayingAudio = null;

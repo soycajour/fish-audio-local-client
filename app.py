@@ -6,6 +6,7 @@ salvo hacia api.fish.audio para generar el audio.
 import json
 import os
 import re
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -20,19 +21,32 @@ from pydub import AudioSegment
 
 import threading
 
-BASE_DIR = Path(__file__).resolve().parent
-AUDIO_DIR = BASE_DIR / "static" / "audio"
-DATA_DIR = BASE_DIR / "data"
+# Determinar rutas base compatibles con desarrollo y con PyInstaller (.exe)
+if getattr(sys, 'frozen', False):
+    BUNDLE_DIR = Path(sys._MEIPASS)
+    APP_DIR = Path(sys.executable).resolve().parent
+else:
+    BUNDLE_DIR = Path(__file__).resolve().parent
+    APP_DIR = BUNDLE_DIR
+
+TEMPLATE_DIR = BUNDLE_DIR / "templates"
+STATIC_DIR = BUNDLE_DIR / "static"
+
+DATA_DIR = APP_DIR / "data"
+AUDIO_DIR = APP_DIR / "static" / "audio"
 CONFIG_PATH = DATA_DIR / "config.json"
 HISTORY_PATH = DATA_DIR / "history.json"
 TRASH_PATH = DATA_DIR / "trash.json"
+PROJECTS_PATH = DATA_DIR / "projects.json"
+LOG_PATH = APP_DIR / "app.log"
+
 FISH_TTS_URL = "https://api.fish.audio/v1/tts"
 
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
-    filename=BASE_DIR / 'app.log',
+    filename=LOG_PATH,
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s'
 )
@@ -52,10 +66,27 @@ DEFAULT_CONFIG = {
     "format": "mp3",
     "speed": 1.0,
     "volume": 0.0,
-    "normalize": True
+    "normalize": True,
+    "active_project_id": "default",
+    "active_part_id": "part-1"
 }
 
-app = Flask(__name__)
+DEFAULT_PROJECTS = [
+    {
+        "id": "default",
+        "name": "General",
+        "parts": [
+            { "id": "part-1", "name": "Parte 1" }
+        ],
+        "created_at": 1725140000
+    }
+]
+
+app = Flask(
+    __name__,
+    template_folder=str(TEMPLATE_DIR),
+    static_folder=str(STATIC_DIR)
+)
 
 
 # ---------------------------------------------------------------- helpers --
@@ -83,8 +114,35 @@ def load_config():
     return cfg
 
 
+def load_projects():
+    projects = load_json(PROJECTS_PATH, list(DEFAULT_PROJECTS))
+    if not projects:
+        projects = list(DEFAULT_PROJECTS)
+        save_projects(projects)
+    return projects
+
+
+def save_projects(data):
+    save_json(PROJECTS_PATH, data)
+
+
 def load_history():
-    return load_json(HISTORY_PATH, [])
+    items = load_json(HISTORY_PATH, [])
+    # Garantizar compatibilidad con entradas anteriores sin proyecto/parte/orden
+    updated = False
+    for item in items:
+        if "project_id" not in item:
+            item["project_id"] = "default"
+            updated = True
+        if "part_id" not in item:
+            item["part_id"] = "part-1"
+            updated = True
+        if "order_index" not in item:
+            item["order_index"] = 1
+            updated = True
+    if updated:
+        save_json(HISTORY_PATH, items)
+    return items
 
 
 def load_trash():
@@ -105,7 +163,6 @@ def index():
 @app.route("/api/config", methods=["GET"])
 def get_config():
     cfg = load_config()
-    # No mandamos la api_key completa de vuelta al front, solo si existe.
     safe = dict(cfg)
     safe["has_api_key"] = bool(cfg.get("api_key"))
     safe.pop("api_key", None)
@@ -124,7 +181,7 @@ def update_config():
     if "voices" in data and isinstance(data["voices"], list):
         cfg["voices"] = data["voices"]
 
-    for field in ["format", "speed", "volume", "normalize"]:
+    for field in ["format", "speed", "volume", "normalize", "active_project_id", "active_part_id"]:
         if field in data:
             cfg[field] = data[field]
 
@@ -158,11 +215,107 @@ def delete_voice(index):
     return jsonify(cfg["voices"])
 
 
+# --------------------------------------------------------------- projects --
+@app.route("/api/projects", methods=["GET"])
+def get_projects():
+    projects = load_projects()
+    return jsonify(projects)
+
+
+@app.route("/api/projects", methods=["POST"])
+def create_project():
+    data = request.get_json(force=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "El nombre del proyecto no puede estar vacío."}), 400
+
+    projects = load_projects()
+    proj_id = f"proj-{uuid.uuid4().hex[:8]}"
+    new_project = {
+        "id": proj_id,
+        "name": name,
+        "parts": [
+            {"id": "part-1", "name": "Parte 1"}
+        ],
+        "created_at": time.time()
+    }
+    projects.append(new_project)
+    save_projects(projects)
+    return jsonify({"project": new_project, "projects": projects})
+
+
+@app.route("/api/projects/<project_id>", methods=["PUT"])
+def update_project(project_id):
+    data = request.get_json(force=True) or {}
+    name = (data.get("name") or "").strip()
+    projects = load_projects()
+    proj = next((p for p in projects if p["id"] == project_id), None)
+    if not proj:
+        return jsonify({"error": "Proyecto no encontrado."}), 404
+
+    if name:
+        proj["name"] = name
+    save_projects(projects)
+    return jsonify({"project": proj, "projects": projects})
+
+
+@app.route("/api/projects/<project_id>/parts", methods=["POST"])
+def add_project_part(project_id):
+    data = request.get_json(force=True) or {}
+    projects = load_projects()
+    proj = next((p for p in projects if p["id"] == project_id), None)
+    if not proj:
+        return jsonify({"error": "Proyecto no encontrado."}), 404
+
+    part_number = len(proj["parts"]) + 1
+    default_name = f"Parte {part_number}"
+    name = (data.get("name") or "").strip() or default_name
+    part_id = f"part-{uuid.uuid4().hex[:8]}"
+
+    new_part = {"id": part_id, "name": name}
+    proj["parts"].append(new_part)
+    save_projects(projects)
+    return jsonify({"part": new_part, "project": proj, "projects": projects})
+
+
+@app.route("/api/projects/<project_id>/parts/<part_id>", methods=["DELETE"])
+def delete_project_part(project_id, part_id):
+    projects = load_projects()
+    proj = next((p for p in projects if p["id"] == project_id), None)
+    if not proj:
+        return jsonify({"error": "Proyecto no encontrado."}), 404
+
+    if len(proj["parts"]) <= 1:
+        return jsonify({"error": "No puedes eliminar la única parte de un proyecto."}), 400
+
+    proj["parts"] = [p for p in proj["parts"] if p["id"] != part_id]
+    save_projects(projects)
+    return jsonify({"project": proj, "projects": projects})
+
+
+@app.route("/api/projects/<project_id>", methods=["DELETE"])
+def delete_project(project_id):
+    projects = load_projects()
+    if len(projects) <= 1:
+        return jsonify({"error": "No puedes eliminar el único proyecto disponible."}), 400
+
+    projects = [p for p in projects if p["id"] != project_id]
+    save_projects(projects)
+    return jsonify({"projects": projects})
+
+
 # ---------------------------------------------------------------- history & trash --
 @app.route("/api/history", methods=["GET"])
 def get_history():
     history = load_history()
-    # Devolver en orden cronológico (1º de primero, 2º de segundo, 3º de tercero...)
+    project_id = request.args.get("project_id")
+    part_id = request.args.get("part_id")
+
+    if project_id:
+        history = [h for h in history if h.get("project_id", "default") == project_id]
+    if part_id:
+        history = [h for h in history if h.get("part_id", "part-1") == part_id]
+
     return jsonify(history)
 
 
@@ -217,7 +370,6 @@ def permanent_delete(entry_id):
         trash = [t for t in trash if t["id"] != entry_id]
         save_json(TRASH_PATH, trash)
     else:
-        # Check if it is in history (e.g. failed items being permanently deleted)
         history = load_history()
         entry_hist = next((h for h in history if h["id"] == entry_id), None)
         if entry_hist:
@@ -319,7 +471,7 @@ def generate():
         return jsonify({"error": "El texto está vacío."}), 400
 
     reference_id = data.get("reference_id") or ""
-    model = "s2.1-pro-free"  # Forzado el modelo gratuito
+    model = "s2.1-pro-free"  # Modelo gratuito de Fish Audio
 
     client_ip = request.remote_addr
     now = time.time()
@@ -334,8 +486,16 @@ def generate():
     volume = float(data.get("volume", 0) or 0)
     normalize = bool(data.get("normalize", True))
 
+    project_id = data.get("project_id") or cfg.get("active_project_id") or "default"
+    part_id = data.get("part_id") or cfg.get("active_part_id") or "part-1"
+
     entry_id = uuid.uuid4().hex
     filename = f"{entry_id}.{audio_format}"
+
+    history = load_history()
+    # Calcular orden consecutivo dentro de este proyecto y parte
+    part_items = [h for h in history if h.get("project_id", "default") == project_id and h.get("part_id", "part-1") == part_id]
+    order_index = len(part_items) + 1
 
     # Crear entrada en historial con estado "pending"
     entry = {
@@ -349,10 +509,12 @@ def generate():
         "status": "pending",
         "speed": speed,
         "volume": volume,
-        "normalize": normalize
+        "normalize": normalize,
+        "project_id": project_id,
+        "part_id": part_id,
+        "order_index": order_index
     }
 
-    history = load_history()
     history.append(entry)
     save_json(HISTORY_PATH, history)
 
@@ -437,10 +599,10 @@ def generate():
         cancel_events.pop(entry_id, None)
 
     cancel_events[entry_id] = threading.Event()
-    # Iniciar hilo de generación
     threading.Thread(target=perform_generation, daemon=True).start()
 
     return jsonify({"entry": entry, "audio_url": f"/static/audio/{filename}"})
+
 
 @app.route("/api/generate/<entry_id>/cancel", methods=["POST"])
 def cancel_generation(entry_id):
@@ -470,9 +632,9 @@ def startup_cleanup():
         save_json(HISTORY_PATH, hist)
         logger.info("Limpiados procesos zombis en el historial.")
 
+
 if __name__ == "__main__":
     startup_cleanup()
     port = int(os.environ.get("PORT", 5050))
     logger.info(f"Iniciando Fish Audio Local en puerto {port}")
     app.run(host="127.0.0.1", port=port, debug=False)
-
