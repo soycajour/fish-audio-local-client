@@ -1,85 +1,87 @@
-# Fish Audio Local
+# Fish Audio Local 🐟
 
-Interfaz de escritorio (corre en tu navegador, servida desde tu propia PC) para generar
-voz con la API de Fish Audio. Nada de créditos ni límite de caracteres — usa tu propia
-clave de API directo contra `api.fish.audio`.
+Interfaz web moderna y de escritorio (ejecutada 100% de forma local en tu navegador y servida desde tu máquina) para generar voz y síntesis de audio de alta calidad utilizando la API de **Fish Audio**.
 
-## Primer uso
+Sin suscripciones intermedias ni límites de plataforma: utiliza directamente tu propia clave de API contra `api.fish.audio`.
 
+---
+
+## ✨ Características principales
+
+- 🚀 **Ejecución en 1 solo clic:** Scripts de inicio automático para Windows (`iniciar.bat`) y Linux/macOS (`start.sh`).
+- ⚡ **Generación asíncrona y por lotes:** Procesa múltiples solicitudes en segundo plano con soporte para cancelación y límites concurrentes.
+- 🧩 **Smart Chunking:** Divide automáticamente textos largos en párrafos y oraciones respetando la prosodia y concatenando el audio final con `pydub`.
+- 🎙️ **Gestor de Biblioteca de Voces:** Agrega y administra tus voces clonadas o predeterminadas mediante su `reference_id`.
+- 🎛️ **Controles de Prosodia:** Ajusta formato (`MP3`, `WAV`, `OPUS`), velocidad de habla, volumen y normalización de texto.
+- 🗂️ **Historial y Papelera:** Historial cronológico con reproductor integrado, descarga directa, modal de detalles extendido y papelera con soporte de restauración.
+- 🔒 **Privacidad Total:** Tu clave de API y archivos generados se almacenan únicamente en tu máquina local (`data/` y `static/audio/`).
+
+---
+
+## 🚀 Inicio Rápido
+
+### En Windows
+Haz doble clic en el archivo:
+```bat
+iniciar.bat
+```
+*(El script detectará tu instalación de Python, creará el entorno virtual si es necesario, instalará las dependencias y abrirá la aplicación en tu navegador en `http://127.0.0.1:5050`)*.
+
+### En Linux / macOS / WSL
+Ejecuta en tu terminal:
 ```bash
+chmod +x start.sh
 ./start.sh
 ```
 
-Eso crea un entorno virtual, instala Flask/requests, y abre `http://127.0.0.1:5050`
-en tu navegador automáticamente. Las siguientes veces es igual de rápido: solo
-`./start.sh` de nuevo.
+---
 
-Si el navegador no abre solo, entra manualmente a esa URL.
+## ⚙️ Configuración
 
-## Configurar tu clave
+1. **Obtener API Key:** Ve a [fish.audio](https://fish.audio) → sección **API Keys** y copia tu clave.
+2. **Guardar en la App:** Abre la pestaña **Ajustes** en la aplicación, pega tu clave y haz clic en **Guardar**. Se almacenará en `data/config.json` de forma segura en tu disco local.
+3. **Agregar Voces:** Copia el `reference_id` de cualquier voz (clonada o pública del dashboard de Fish Audio), asígnale un nombre y agrégala en la pestaña Ajustes. Aparecerá inmediatamente en el selector del editor.
 
-1. Ve a [fish.audio](https://fish.audio) → API Keys, copia tu clave.
-2. En la app, pestaña **Ajustes** → pega la clave en "Clave de API" → **Guardar**.
-   Se guarda en `config.json` local, nunca sale de tu PC salvo hacia Fish Audio.
-3. (Opcional) Agrega tus voces: cada voz clonada o de la biblioteca tiene un
-   `reference_id` en el dashboard de Fish Audio. Ponle un nombre y pégalo en
-   "Mis voces" para que aparezca en el selector del editor.
+---
 
-## Uso
+## ⌨️ Atajos de Teclado
 
-Escribe el texto, elige voz y modelo, `Ctrl + Enter` o clic en **Generar discurso**.
-El audio se reproduce solo y queda guardado en la pestaña **Historia** (con
-descarga individual). Todo se guarda localmente en `static/audio/` +
-`history.json` — nada se sube a ningún lado más que a Fish Audio para generar
-el audio.
+- `Ctrl + Enter` (o `Cmd + Enter` en Mac): Genera el discurso del texto actual inmediatamente.
 
-El botón **+ énfasis** envuelve el texto que selecciones en `[énfasis]...[/énfasis]`
-para las etiquetas de prosodia de Fish Audio.
+---
 
-## Importante: ventana gratuita de S2.1 Pro
+## 📁 Estructura del Proyecto
 
-Según la documentación de Fish Audio, el modelo `s2.1-pro-free` es gratis e
-ilimitado (bajo Fair Use) **hasta el 31 de julio de 2026**. Hoy es 21 de julio,
-o sea quedan ~10 días de esa ventana confirmada. Fish Audio dice que avisará
-antes de cualquier cambio, pero si vas a construir algo para un cliente sobre
-este modelo, vale la pena tener un plan B (plan de pago) por si el gratuito
-no se extiende de nuevo.
-
-## Windows / WSL
-
-Si corres `./start.sh` con `bash` desde PowerShell, en realidad se ejecuta
-dentro de tu WSL (Ubuntu/Debian). Si ves un error de `ensurepip`/`venv` la
-primera vez, es porque a esa distro le falta el paquete del módulo venv.
-El script ahora lo detecta solo e intenta arreglarlo automáticamente con
-`apt` (te va a pedir tu contraseña de sudo, escríbela ahí mismo en la
-terminal). Si aun así falla, corre esto dentro de la terminal de WSL
-(no en PowerShell) y vuelve a intentar:
-
-```bash
-sudo apt update && sudo apt install python3-venv
-```
-
-## Estructura del proyecto
-
-```
+```text
 fish-audio-local/
-  app.py              # backend Flask, hace de proxy hacia api.fish.audio
-  templates/index.html
-  static/css/style.css
-  static/js/app.js
-  static/audio/        # mp3/wav generados (se crea solo)
-  config.json           # tu API key + voces guardadas (se crea al usar la app)
-  history.json          # historial de generaciones (se crea al usar la app)
-  start.sh
+├── app.py                     # Servidor backend Flask y proxy a la API de Fish Audio
+├── requirements.txt           # Dependencias de Python (Flask, requests, pydub)
+├── iniciar.bat                # Lanzador automatizado para Windows
+├── start.sh                   # Lanzador automatizado para Linux/macOS/WSL
+├── templates/
+│   └── index.html             # Interfaz web principal
+├── static/
+│   ├── css/
+│   │   └── style.css          # Estilos modernos y responsivos
+│   ├── js/
+│   │   └── app.js             # Lógica cliente, reproductor, llamadas API y animaciones
+│   └── audio/                 # Directorio de salida para los audios generados
+├── data/                      # Datos locales (ignorado por Git por seguridad)
+│   ├── config.json            # Clave de API y configuración de voces
+│   ├── history.json           # Registro del historial de generaciones
+│   └── trash.json             # Elementos en papelera
+└── docs/                      # Documentación y guías de diseño
 ```
 
-## Notas técnicas
+---
 
-- El header `model` (ej. `s2.1-pro-free`) y el body `{text, reference_id, format}`
-  siguen exactamente el ejemplo de la documentación oficial de Fish Audio.
-- Los campos `prosody.speed`, `prosody.volume` y `normalize` reflejan los
-  controles que se ven en el playground web de Fish Audio (velocidad, volumen,
-  normalización). Si Fish Audio cambia los nombres de estos parámetros en su
-  API, la app te va a mostrar el error exacto que devuelva el servidor en el
-  panel rojo debajo del editor — con eso ajustamos `app.py` en dos minutos.
-- Sin base de datos, sin Docker, sin Node. Solo Python 3 + venv.
+## 🛠️ Requisitos Previos
+
+- **Python 3.10 o superior**.
+- (Opcional recomendado) **FFmpeg** instalado en el sistema para permitir conversiones avanzadas de formatos de audio con `pydub`.
+
+---
+
+## 📄 Licencia
+
+Distribuido bajo la Licencia MIT. Consulta el archivo `LICENSE` para más información.

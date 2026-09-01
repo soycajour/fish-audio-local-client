@@ -1,11 +1,41 @@
+# Python & Virtual Environments
 venv/
+.venv/
+env/
+ENV/
 __pycache__/
-*.pyc
-.env
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+
+# Logs
+*.log
+app.log
+
+# Local User Data & Secrets
 data/
 config.json
 history.json
 trash.json
-*.log
+.env
+.env.*
+!.env.example
+
+# Generated Audio Files (Preserve .keep)
 static/audio/*
 !static/audio/.keep
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS & Shortcuts
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
