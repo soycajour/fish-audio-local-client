@@ -633,8 +633,20 @@ def startup_cleanup():
         logger.info("Limpiados procesos zombis en el historial.")
 
 
+import webbrowser
+
+
+def open_browser(port):
+    time.sleep(1.2)
+    try:
+        webbrowser.open(f"http://127.0.0.1:{port}")
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
     startup_cleanup()
     port = int(os.environ.get("PORT", 5050))
     logger.info(f"Iniciando Fish Audio Local en puerto {port}")
+    threading.Thread(target=open_browser, args=(port,), daemon=True).start()
     app.run(host="127.0.0.1", port=port, debug=False)
