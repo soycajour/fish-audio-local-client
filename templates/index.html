@@ -1,295 +1,1065 @@
 <!DOCTYPE html>
-<html lang="es">
+<html class="dark h-full bg-[#0d0e12]" lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fish Audio Local — Texto a voz</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fish Audio Local — Estación de Trabajo TTS</title>
+  
+  <!-- Google Fonts: Inter, Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS v3 -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#6382ff',
+              500: '#5375fe',
+              600: '#415ee0',
+              700: '#344bc2'
+            },
+            surface: {
+              base: '#0d0e12',
+              card: '#13151b',
+              panel: '#171922',
+              input: '#1d202b',
+              border: '#252836',
+              borderLight: '#2f3446'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          boxShadow: {
+            'glow-brand': '0 0 20px -3px rgba(83, 117, 254, 0.35)',
+            'glow-emerald': '0 0 16px -2px rgba(16, 185, 129, 0.4)',
+            'inner-subtle': 'inset 0 1px 2px 0 rgba(0, 0, 0, 0.3)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Premium Studio UI Styles & Custom Elements -->
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #0d0e12;
+      color: #e2e8f0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Scrollbars elegantes para DAW */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0d0e12;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #252836;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3b4054;
+    }
+
+    /* Sliders personalizados de precisión */
+    input[type="range"] {
+      -webkit-appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+    input[type="range"]:focus {
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 5px;
+      border-radius: 9999px;
+      background-color: #252836;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 14px;
+      width: 14px;
+      border-radius: 50%;
+      background: #5375fe;
+      cursor: pointer;
+      margin-top: -5px;
+      box-shadow: 0 0 10px rgba(83, 117, 254, 0.7);
+      border: 2px solid #ffffff;
+      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+      box-shadow: 0 0 14px rgba(83, 117, 254, 0.9);
+      background: #6a8aff;
+    }
+
+    /* Selects oscuros sin estilo gris tosco de Windows */
+    select {
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+      background-position: right 0.5rem center !important;
+      background-repeat: no-repeat !important;
+      background-size: 1.25em 1.25em !important;
+      padding-right: 2rem !important;
+      -webkit-print-color-adjust: exact;
+      color-adjust: exact;
+    }
+
+    select option {
+      background-color: #171922;
+      color: #e2e8f0;
+      padding: 8px 12px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Animación de onda sonora pulsante */
+    @keyframes waveBar {
+      0%, 100% { height: 6px; }
+      50% { height: 26px; }
+    }
+    .wave-animated span {
+      animation: waveBar 1.2s ease-in-out infinite;
+    }
+    .wave-animated span:nth-child(2) { animation-delay: 0.15s; }
+    .wave-animated span:nth-child(3) { animation-delay: 0.3s; }
+    .wave-animated span:nth-child(4) { animation-delay: 0.45s; }
+    .wave-animated span:nth-child(5) { animation-delay: 0.6s; }
+    .wave-animated span:nth-child(6) { animation-delay: 0.25s; }
+    .wave-animated span:nth-child(7) { animation-delay: 0.4s; }
+    .wave-animated span:nth-child(8) { animation-delay: 0.55s; }
+  </style>
 </head>
-<body>
+<body class="h-full text-slate-200 antialiased overflow-hidden flex flex-col bg-[#0d0e12] select-none">
 
-<header class="topbar">
-  <div class="brand">
-    <span class="brand-mark">🐟</span>
-    <span class="brand-name">Fish Audio <span class="brand-local">Local</span></span>
-  </div>
-  <div class="topbar-status">
-    <span id="apiStatusDot" class="status-dot status-unknown"></span>
-    <span id="apiStatusText">Comprobando clave de API…</span>
-  </div>
-</header>
-
-<main class="layout">
-
-  <!-- ------------------------------------------------------------ panel izquierdo -->
-  <section class="editor-panel">
+  <!-- ========================================================================= -->
+  <!-- TOPBAR DE ALTA FIDELIDAD                                                  -->
+  <!-- ========================================================================= -->
+  <header class="h-14 border-b border-surface-border bg-surface-card/95 backdrop-blur-md px-6 flex items-center justify-between shrink-0 z-30 shadow-sm" data-purpose="top-navigation">
     
-    <!-- Editor Card -->
-    <div class="editor-card">
-      <div class="editor-toolbar">
+    <!-- Brand Logo and Identifier -->
+    <div class="flex items-center space-x-3">
+      <span class="text-2xl filter drop-shadow-md select-none" role="img" aria-label="Fish icon">🐟</span>
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-bold tracking-tight text-white">Fish Audio</span>
+        <span class="text-[10px] uppercase font-mono font-bold tracking-widest text-white bg-gradient-to-r from-brand-600 to-brand-500 px-2 py-0.5 rounded shadow-sm">
+          LOCAL STUDIO
+        </span>
+      </div>
+    </div>
+
+    <!-- API Status & Engine Information -->
+    <div class="flex items-center space-x-4">
+      <div id="apiStatusContainer" class="flex items-center space-x-2.5 bg-surface-panel/90 border border-emerald-950/70 text-emerald-400 text-xs px-3.5 py-1.5 rounded-full shadow-inner-subtle transition-all" data-purpose="api-status">
+        <span class="relative flex h-2.5 w-2.5">
+          <span id="apiStatusPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span id="apiStatusDot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-glow-emerald"></span>
+        </span>
+        <span id="apiStatusText" class="font-medium tracking-tight">Comprobando clave de API…</span>
+      </div>
+
+      <a href="https://fish.audio" target="_blank" rel="noopener" class="text-slate-400 hover:text-brand-400 p-1.5 rounded-lg hover:bg-surface-panel transition-all" title="Abrir fish.audio en navegador">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+        </svg>
+      </a>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- WORKSPACE PRINCIPAL (LAYOUT COMPACTO DE ESTUDIO DAW)                      -->
+  <!-- ========================================================================= -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- COLUMNA PRINCIPAL DE TRABAJO -->
+    <main class="flex-1 overflow-y-auto p-6 pr-5 space-y-6" data-purpose="editor-workarea">
+      
+      <!-- BARRA DE CONTEXTO DE PROYECTO & SELECTORES -->
+      <section class="bg-surface-card border border-surface-border rounded-2xl p-3 flex flex-wrap items-center gap-3 text-xs shadow-md" data-purpose="project-context-selectors">
         
         <!-- Selector de Proyecto -->
-        <div class="toolbar-group">
-          <label for="projectSelect">📁 Proyecto</label>
-          <div class="select-with-btn">
-            <select id="projectSelect">
+        <div class="flex items-center bg-surface-panel border border-surface-borderLight/50 rounded-xl px-2.5 py-1.5 space-x-2 flex-1 min-w-[280px] shadow-inner-subtle focus-within:border-brand-500/80 transition-all">
+          <span class="text-amber-400 text-sm" title="Proyecto actual">📁</span>
+          <span class="text-slate-400 font-semibold uppercase tracking-wider text-[10px] whitespace-nowrap">Proyecto:</span>
+          <div class="relative flex-1">
+            <select id="projectSelect" class="w-full bg-transparent text-slate-100 text-xs font-medium border-0 focus:ring-0 truncate cursor-pointer pr-7">
               <!-- Cargado dinámicamente -->
             </select>
-            <button id="newProjectBtn" class="toolbar-icon-btn" title="Nuevo proyecto">+</button>
+          </div>
+          <button id="newProjectBtn" class="bg-surface-input hover:bg-surface-border text-slate-300 px-2 py-1 rounded text-xs transition-colors border border-surface-borderLight/30 font-bold" title="Crear nuevo proyecto">+</button>
+          <div class="relative inline-block">
+            <button id="projectOptionsBtn" class="bg-surface-borderLight/50 text-white px-2 py-1 rounded text-xs transition-colors border border-brand-500/50 flex items-center justify-center shadow-sm" title="Opciones de proyecto">
+              <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle><circle cx="5" cy="12" r="2"></circle></svg>
+            </button>
+            <div id="projectContextMenu" class="absolute left-0 mt-1.5 w-56 bg-surface-card border border-surface-borderLight/60 rounded-xl shadow-2xl z-30 py-1 text-xs backdrop-blur hidden">
+              <div class="px-3 py-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider border-b border-surface-border/40">Opciones de Proyecto</div>
+              <button id="menuActionRename" class="w-full text-left px-3 py-2 flex items-center justify-between text-slate-200 hover:bg-surface-panel hover:text-white transition-colors group">
+                <div class="flex items-center space-x-2">
+                  <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                  <span>Renombrar proyecto</span>
+                </div>
+                <span class="text-[10px] font-mono text-slate-500 group-hover:text-slate-400">F2</span>
+              </button>
+              <button id="menuActionNewPart" class="w-full text-left px-3 py-2 flex items-center space-x-2 text-slate-200 hover:bg-surface-panel hover:text-white transition-colors group">
+                <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                <span>Añadir nueva parte</span>
+              </button>
+              <div class="my-1 border-t border-surface-border/60"></div>
+              <button id="menuActionDelete" class="w-full text-left px-3 py-2 flex items-center space-x-2 text-rose-400 hover:bg-rose-500/10 transition-colors group">
+                <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                <span>Eliminar proyecto</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Selector de Parte -->
-        <div class="toolbar-group">
-          <label for="partSelect">📑 Parte</label>
-          <div class="select-with-btn">
-            <select id="partSelect">
-              <!-- Cargado dinámicamente según el proyecto -->
-            </select>
-            <button id="newPartBtn" class="toolbar-icon-btn" title="Nueva parte">+</button>
-          </div>
+        <!-- Selector de Parte / Capítulo -->
+        <div class="flex items-center bg-surface-panel border border-surface-borderLight/50 rounded-xl px-2.5 py-1.5 space-x-2 min-w-[170px] shadow-inner-subtle focus-within:border-brand-500/80 transition-all">
+          <span class="text-blue-400 text-sm" title="Parte o capítulo">📄</span>
+          <span class="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Parte:</span>
+          <select id="partSelect" class="bg-transparent text-slate-100 text-xs font-medium border-0 focus:ring-0 cursor-pointer flex-1 pr-7">
+            <!-- Cargado dinámicamente -->
+          </select>
+          <button id="newPartBtn" class="bg-surface-input hover:bg-surface-border text-slate-300 hover:text-white px-2 py-1 rounded-lg text-xs transition-all border border-surface-borderLight/40 font-bold" title="Añadir nueva parte">
+            +
+          </button>
         </div>
 
-        <!-- Selector de Voz -->
-        <div class="toolbar-group">
-          <label for="voiceSelect">🎙️ Voz</label>
-          <select id="voiceSelect">
+        <!-- Selector Rápido de Voz -->
+        <div class="flex items-center bg-surface-panel border border-surface-borderLight/50 rounded-xl px-2.5 py-1.5 space-x-2 min-w-[200px] shadow-inner-subtle focus-within:border-brand-500/80 transition-all">
+          <span class="text-purple-400 text-sm" title="Voz activa">🎙️</span>
+          <span class="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Voz:</span>
+          <select id="voiceSelect" class="bg-transparent text-slate-100 text-xs font-medium border-0 focus:ring-0 cursor-pointer flex-1 truncate pr-7">
             <!-- Cargado dinámicamente -->
           </select>
         </div>
 
+        <!-- Botón de Importación de Texto -->
+        <button id="batchImportBtn" class="bg-surface-panel hover:bg-surface-input text-brand-400 hover:text-white px-3.5 py-2 rounded-xl text-xs font-semibold border border-surface-borderLight/50 transition-all flex items-center gap-2 shadow-sm hover:border-brand-500/50" title="Importar archivos de texto">
+          <span>📥</span>
+          <span>Importar .txt</span>
+        </button>
+      </section>
+
+      <!-- EDITOR PROMPTER DE TEXTO -->
+      <section class="bg-surface-card border border-surface-border rounded-2xl p-5 shadow-xl flex flex-col focus-within:border-brand-500 focus-within:shadow-glow-brand transition-all duration-200" data-purpose="tts-prompter-box">
+        <label class="sr-only" for="textInput">Texto que quieres convertir en voz</label>
+        <textarea id="textInput" class="w-full bg-transparent border-0 resize-y p-0 text-slate-100 placeholder-slate-500 focus:ring-0 text-sm leading-relaxed outline-none min-h-[130px] font-sans" placeholder="Escribe o pega el texto que quieres convertir en voz..." rows="5"></textarea>
+        
+        <!-- Barra de herramientas inferior dentro del editor -->
+        <div class="mt-4 pt-3.5 border-t border-surface-border/60 flex items-center justify-between flex-wrap gap-3">
+          <div class="flex items-center space-x-3 text-xs text-slate-400">
+            <span id="charCount" class="font-mono text-slate-300 font-medium">0 caracteres</span>
+            <span class="text-surface-borderLight">|</span>
+            <span id="estimatedDuration" class="text-slate-400 font-mono">Estimado: ~0.0s</span>
+            <span class="text-surface-borderLight">|</span>
+            <button id="quickUploadTxtBtn" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-brand-400 hover:text-white bg-surface-panel hover:bg-brand-500/20 border border-surface-borderLight/40 transition-colors cursor-pointer" title="Importar archivos .txt" type="button">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+              <span>Subir .txt</span>
+            </button>
+          </div>
+
+          <div class="flex items-center space-x-3">
+            <span id="queueBadge" class="bg-brand-500/20 text-brand-300 border border-brand-500/40 text-[11px] font-mono px-2.5 py-1 rounded-lg hidden flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-400 animate-ping"></span>
+              <span>0 en curso</span>
+            </span>
+            
+            <button id="generateBtn" class="group relative inline-flex items-center gap-2.5 bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-semibold text-xs py-2.5 px-5 rounded-xl shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+              </svg>
+              <span id="generateBtnLabel" class="tracking-wide">Generar discurso</span>
+              <kbd class="bg-black/30 text-[10px] uppercase font-mono px-2 py-0.5 rounded text-brand-100 group-hover:bg-black/45 transition-colors border border-white/10">Ctrl ↵</kbd>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cuadro de error flotante -->
+      <div id="errorBox" class="bg-rose-950/60 border border-rose-900 text-rose-200 text-xs px-4 py-3 rounded-xl hidden flex items-center justify-between shadow-lg">
+        <div class="flex items-center space-x-2">
+          <span>⚠️</span>
+          <span id="errorBoxText">Error</span>
+        </div>
+        <button onclick="document.getElementById('errorBox').classList.add('hidden')" class="text-rose-400 hover:text-white font-bold px-2 py-0.5 rounded">✕</button>
       </div>
 
-      <textarea id="textInput" placeholder="Escribe o pega el texto que quieres convertir en voz…"></textarea>
+      <!-- SECCIÓN: HISTORIA DE LA GENERACIÓN (TOMAS DE AUDIO) -->
+      <section class="space-y-3.5" data-purpose="history-feed">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2.5">
+            <h2 class="text-sm font-bold text-white tracking-wide">Historia de la generación</h2>
+            <span id="audioCountBadge" class="bg-surface-input border border-surface-borderLight/60 text-[11px] font-mono text-slate-300 font-semibold px-2.5 py-0.5 rounded-full shadow-inner-subtle">0</span>
+          </div>
+          <div id="currentScopeBadge" class="text-xs text-brand-400 font-semibold truncate max-w-md bg-brand-500/10 border border-brand-500/20 px-3 py-1 rounded-lg">
+            General / Parte 1
+          </div>
+        </div>
 
-      <div class="editor-footer">
-        <span id="charCount" class="char-count">0 caracteres</span>
-        <div class="generate-actions">
-          <span id="queueBadge" class="queue-badge hidden">0/5 en curso</span>
-          <button id="generateBtn" class="generate-btn">
-            <span id="generateBtnLabel">Generar discurso</span>
-            <kbd>Ctrl ↵</kbd>
+        <!-- Contenedor de Tarjetas de Audio -->
+        <div id="audioCardsContainer" class="space-y-3">
+          <!-- Renderizado dinámicamente con estilo exacto de Stitch -->
+        </div>
+
+        <!-- Estado Vacío -->
+        <div id="resultsEmpty" class="bg-surface-card border border-surface-border border-dashed rounded-2xl p-10 text-center space-y-2.5 shadow-sm">
+          <div class="text-3xl">🎧</div>
+          <p class="text-xs font-medium text-slate-400">Los audios que generes para esta parte se irán acumulando aquí en orden consecutivo (#1, #2, #3...).</p>
+          <p class="text-[11px] text-slate-500 font-mono">Escribe tu texto arriba y presiona Generar discurso o Ctrl + Enter</p>
+        </div>
+      </section>
+
+      <!-- SECCIÓN: BIBLIOTECA MY VOICE -->
+      <section class="space-y-3.5 pt-2" data-purpose="voice-library">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold text-white tracking-wide">Biblioteca My Voice</h2>
+          <button id="openAddVoiceBtn" class="text-xs text-brand-400 hover:text-brand-300 font-semibold transition-colors flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-surface-panel border border-surface-borderLight/40 hover:border-brand-500/40">
+            <span>+ Añadir Voz</span>
+          </button>
+        </div>
+
+        <div id="libraryList" class="grid grid-cols-1 gap-3.5">
+          <!-- Renderizado dinámicamente -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ========================================================================= -->
+    <!-- PANEL LATERAL DERECHO (INSPECTOR DE AJUSTES & HISTORIAL)                   -->
+    <!-- ========================================================================= -->
+    <aside class="w-80 border-l border-surface-border bg-surface-card flex flex-col shrink-0" data-purpose="settings-and-tools-sidebar">
+      
+      <!-- Pestañas de navegación -->
+      <nav class="flex border-b border-surface-border text-xs font-semibold shrink-0">
+        <button class="tab-btn active flex-1 py-3.5 text-center border-b-2 border-brand-500 text-white tracking-wide transition-all bg-surface-panel/20" data-tab="ajustes">
+          Ajustes
+        </button>
+        <button class="tab-btn flex-1 py-3.5 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all" data-tab="historia">
+          Historial
+        </button>
+        <button class="tab-btn flex-1 py-3.5 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center gap-1.5" data-tab="papelera">
+          <span>Papelera</span>
+          <span id="trashCountBadge" class="bg-surface-input text-slate-400 text-[10px] font-mono px-2 py-0.5 rounded-full">0</span>
+        </button>
+      </nav>
+
+      <!-- Contenido de la pestaña: Ajustes -->
+      <div id="tab-ajustes" class="tab-content active flex-1 overflow-y-auto p-5 space-y-6 text-xs">
+        
+        <!-- Grupo 1: Clave de API -->
+        <div class="space-y-2" data-purpose="api-key-group">
+          <label class="block font-semibold text-slate-300 uppercase tracking-wider text-[10px]" for="apiKeyInput">Clave de API de Fish Audio</label>
+          <div class="flex space-x-2">
+            <input id="apiKeyInput" class="w-full bg-surface-input border border-surface-borderLight/60 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 font-mono shadow-inner-subtle" placeholder="fs_..." type="password" autocomplete="off" />
+            <button id="saveKeyBtn" class="bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 shadow-md shadow-brand-500/20">
+              Guardar
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            Consíguela en <a class="text-brand-400 hover:underline font-medium" href="https://fish.audio" target="_blank" rel="noopener">fish.audio</a>. Se guarda solo en tu equipo.
+          </p>
+        </div>
+
+        <!-- Grupo 2: Añadir Voz -->
+        <div class="space-y-2 pt-3 border-t border-surface-border/60" data-purpose="add-voice-group">
+          <label class="block font-semibold text-slate-300 uppercase tracking-wider text-[10px]">Agregar nueva voz</label>
+          <div class="space-y-2">
+            <input id="newVoiceName" class="w-full bg-surface-input border border-surface-borderLight/60 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 shadow-inner-subtle" placeholder="Nombre (ej. Junior Cajour)" type="text" />
+            <div class="flex space-x-2">
+              <input id="newVoiceId" class="w-full bg-surface-input border border-surface-borderLight/60 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 font-mono text-[11px] shadow-inner-subtle" placeholder="reference_id de la voz" type="text" />
+              <button id="addVoiceBtn" class="bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 shadow-md shadow-brand-500/20" title="Agregar voz a la biblioteca">
+                +
+              </button>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            El <span class="font-mono text-slate-300">reference_id</span> se copia desde tu biblioteca en fish.audio.
+          </p>
+        </div>
+
+        <!-- Grupo 3: Formato de Salida -->
+        <div class="space-y-2 pt-3 border-t border-surface-border/60" data-purpose="format-selection">
+          <label class="block font-semibold text-slate-300 uppercase tracking-wider text-[10px]" for="formatSelect">Formato de salida</label>
+          <div class="relative">
+            <select id="formatSelect" class="w-full bg-surface-input border border-surface-borderLight/60 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-brand-500 cursor-pointer shadow-inner-subtle">
+              <option value="mp3" selected>MP3 (Estándar recomendado)</option>
+              <option value="wav">WAV (Sin compresión / Máxima calidad)</option>
+              <option value="opus">OPUS (Alta compresión / Baja latencia)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Grupo 4: Sliders de Prosodia -->
+        <div class="space-y-4 pt-3 border-t border-surface-border/60" data-purpose="sliders-group">
+          <!-- Velocidad -->
+          <div class="space-y-2">
+            <div class="flex justify-between items-center text-xs font-medium">
+              <span class="text-slate-300 font-semibold">Velocidad</span>
+              <span id="speedVal" class="font-mono text-brand-400 font-bold bg-brand-500/10 px-2 py-0.5 rounded border border-brand-500/20">1.0x</span>
+            </div>
+            <input id="speedRange" class="w-full" max="2.0" min="0.5" step="0.05" type="range" value="1.0" />
+          </div>
+
+          <!-- Volumen -->
+          <div class="space-y-2">
+            <div class="flex justify-between items-center text-xs font-medium">
+              <span class="text-slate-300 font-semibold">Volumen</span>
+              <span id="volumeVal" class="font-mono text-brand-400 font-bold bg-brand-500/10 px-2 py-0.5 rounded border border-brand-500/20">0</span>
+            </div>
+            <input id="volumeRange" class="w-full" max="20" min="-20" step="1" type="range" value="0" />
+          </div>
+        </div>
+
+        <!-- Grupo 5: Normalización de texto -->
+        <div class="pt-3 border-t border-surface-border/60 flex items-center justify-between" data-purpose="normalization-switch">
+          <div>
+            <span class="text-xs font-semibold text-slate-200 block">Normalización de texto</span>
+            <span class="text-[11px] text-slate-400 block leading-tight mt-0.5">Corrige signos, números y acrónimos</span>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input id="normalizeToggle" checked class="sr-only peer" type="checkbox" />
+            <div class="w-10 h-5.5 bg-surface-input peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-brand-500 shadow-inner"></div>
+          </label>
+        </div>
+
+      </div>
+
+      <!-- Contenido de la pestaña: Historial -->
+      <div id="tab-historia" class="tab-content hidden flex-1 overflow-y-auto p-5 space-y-3 text-xs">
+        <div id="historyEmpty" class="text-slate-500 text-center py-12 font-medium">Todavía no has generado audios.</div>
+        <div id="historyList" class="space-y-3"></div>
+      </div>
+
+      <!-- Contenido de la pestaña: Papelera -->
+      <div id="tab-papelera" class="tab-content hidden flex-1 overflow-y-auto p-5 space-y-3 text-xs">
+        <div class="flex items-center justify-between pb-2.5 border-b border-surface-border">
+          <span class="font-bold text-white">Papelera local</span>
+          <button id="emptyTrashBtn" class="text-[11px] font-semibold text-rose-400 hover:text-rose-300 transition-colors hidden">Vaciar todo</button>
+        </div>
+        <div id="trashEmpty" class="text-slate-500 text-center py-12 font-medium">La papelera está vacía.</div>
+        <div id="trashList" class="space-y-3"></div>
+      </div>
+
+      <!-- Footer con información técnica -->
+      <div class="p-3.5 border-t border-surface-border bg-surface-panel/50 text-[11px] text-slate-400 flex justify-between items-center shrink-0">
+        <span class="font-mono text-slate-400">Fish Audio S2.1 Pro</span>
+        <span class="font-mono text-emerald-400 flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          Motor Local Listo
+        </span>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODALES DE ALTA FIDELIDAD                                                 -->
+  <!-- ========================================================================= -->
+
+  <!-- MODAL: NUEVO PROYECTO / PARTE -->
+  <div id="projectModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 hidden">
+    <div class="max-w-lg w-full bg-[#161821] border border-[#2b3044] rounded-2xl shadow-2xl p-6 text-slate-100 relative space-y-5 transition-all">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex items-start space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center text-lg shrink-0 shadow-inner">
+            📁
+          </div>
+          <div>
+            <h2 id="projectModalTitle" class="text-base font-bold text-white tracking-tight">Crear Nuevo Proyecto</h2>
+            <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">
+              Estructura tus audios en proyectos y secciones ordenadas.
+            </p>
+          </div>
+        </div>
+        <button id="projectModalCloseBtn" class="text-slate-400 hover:text-white bg-surface-input border border-surface-borderLight/40 px-2.5 py-1 rounded-lg text-xs transition-colors font-mono">
+          ✕ ESC
+        </button>
+      </div>
+
+      <!-- Segmented Tab Selector -->
+      <div class="grid grid-cols-2 bg-[#0d0e12] p-1 rounded-xl border border-[#252836] text-xs font-semibold">
+        <button id="tabNewProjectToggle" class="flex items-center justify-center gap-2 py-2 rounded-lg bg-[#1e2230] text-blue-400 font-bold shadow-sm border border-blue-500/30 transition-all" type="button">
+          <span>📁</span>
+          <span>Nuevo Proyecto</span>
+        </button>
+        <button id="tabNewPartToggle" class="flex items-center justify-center gap-2 py-2 rounded-lg text-slate-400 hover:text-slate-200 transition-colors" type="button">
+          <span>📄</span>
+          <span>Nueva Parte</span>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div id="projectInputContainer" class="space-y-1.5">
+          <label class="block font-semibold text-slate-300">
+            Nombre del Proyecto <span class="text-blue-400">*</span>
+          </label>
+          <input id="newProjectNameInput" class="w-full bg-[#0d0e12] border border-[#2b3044] rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all shadow-inner-subtle" placeholder="ej. Audiolibro Capítulo 1, Novela Ligera..." type="text" />
+        </div>
+
+        <div class="space-y-1.5">
+          <label id="partInputLabel" class="block font-semibold text-slate-300">Nombre de la Parte</label>
+          <input id="newPartNameInput" class="w-full bg-[#0d0e12] border border-[#2b3044] rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all shadow-inner-subtle" type="text" placeholder="Parte 1" value="Parte 1" />
+        </div>
+
+        <div class="space-y-1.5">
+          <div class="flex justify-between items-center">
+            <label class="block font-semibold text-slate-300">Descripción o notas</label>
+            <span class="text-[10px] text-slate-500">Opcional</span>
+          </div>
+          <textarea id="projectNotesInput" class="w-full bg-[#0d0e12] border border-[#2b3044] rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all resize-none shadow-inner-subtle" placeholder="Directrices de pronunciación, tono o personajes..." rows="2"></textarea>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-[#252836] flex items-center justify-end space-x-3">
+        <button id="projectModalCancelBtn" class="text-xs text-slate-400 hover:text-white px-4 py-2.5 rounded-xl hover:bg-surface-input transition-colors">
+          Cancelar
+        </button>
+        <button id="projectModalSaveBtn" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-blue-500/20 active:scale-[0.98]">
+          <span id="projectModalSaveBtnText">Crear Proyecto</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DETALLES Y REPRODUCTOR COMPLETO DE TOMA -->
+  <div id="detailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden" role="dialog">
+    <div class="relative w-full max-w-2xl bg-[#14161f] border border-[#262b3d] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      
+      <!-- Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-surface-border bg-surface-card/80">
+        <div class="flex items-center space-x-3 min-w-0">
+          <span id="detailOrderBadge" class="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-brand-500 text-white shadow-sm">#1</span>
+          <div class="min-w-0">
+            <h3 id="detailHeaderTitle" class="text-sm font-bold text-white tracking-wide truncate">Detalles de la Toma</h3>
+            <p id="detailScopeBreadcrumb" class="text-[11px] text-brand-400 font-medium truncate">General / Parte 1</p>
+          </div>
+        </div>
+        <button id="detailsModalCloseBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-surface-panel hover:bg-surface-input text-slate-400 hover:text-white border border-surface-border transition-colors text-xs font-mono">
+          <span>✕</span>
+          <span class="text-[10px] text-slate-500">ESC</span>
+        </button>
+      </div>
+
+      <!-- Body con scroll -->
+      <div class="p-6 space-y-5 overflow-y-auto flex-1 text-xs">
+        
+        <!-- Reproductor Principal con Visualizador de Onda -->
+        <div class="bg-surface-panel/95 border border-[#272b3c] rounded-2xl p-5 space-y-4 shadow-inner">
+          <div class="flex items-center justify-between text-[11px]">
+            <div class="flex items-center space-x-2">
+              <span class="relative flex h-2.5 w-2.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span id="detailPlayerStatus" class="text-slate-300 font-semibold">Reproducción lista</span>
+            </div>
+            <span id="detailFormatBadge" class="font-mono px-2.5 py-0.5 rounded-md bg-[#0f1118] text-brand-400 border border-surface-border text-[10px]">MP3 (44.1 kHz)</span>
+          </div>
+
+          <!-- Soundwave animada -->
+          <div id="soundwaveContainer" class="h-16 flex items-center justify-between gap-1.5 px-3 py-2 bg-[#0f1118] rounded-xl border border-surface-border/80">
+            <span class="w-1.5 rounded-full bg-brand-500 h-5 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-brand-500 h-9 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-brand-500 h-12 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-brand-500 h-7 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-brand-500 h-14 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-brand-500 h-10 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-brand-500 h-13 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-brand-400 h-16 shadow-lg shadow-brand-500/50 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-surface-borderLight h-11 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-surface-borderLight h-8 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-surface-borderLight h-13 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-surface-borderLight h-7 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-surface-borderLight h-11 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-surface-borderLight h-5 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-surface-borderLight h-10 transition-all"></span>
+            <span class="w-1.5 rounded-full bg-surface-borderLight h-6 transition-all"></span>
+          </div>
+
+          <!-- Slider y Duraciones -->
+          <div class="space-y-1.5">
+            <input id="detailSlider" type="range" min="0" max="100" value="0" class="w-full cursor-pointer" />
+            <div class="flex justify-between items-center text-[11px] font-mono text-slate-400">
+              <span id="detailCurrentTime" class="text-brand-400 font-bold">00:00.0</span>
+              <span id="detailTotalTime">00:00.0</span>
+            </div>
+          </div>
+
+          <!-- Controles de Transporte -->
+          <div class="flex items-center justify-between pt-1">
+            <div class="flex items-center space-x-3">
+              <button id="detailSeekBackBtn" class="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-surface-input transition-all" title="Retroceder 5 segundos">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+                </svg>
+              </button>
+
+              <button id="detailPlayBtn" class="w-11 h-11 rounded-full bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center shadow-lg shadow-brand-500/40 transition-transform active:scale-95">
+                <span id="detailPlayIcon" class="text-base font-bold">▶</span>
+              </button>
+
+              <button id="detailSeekFwdBtn" class="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-surface-input transition-all" title="Avanzar 5 segundos">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+                </svg>
+              </button>
+            </div>
+
+            <span id="detailSpeedPill" class="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-surface-input border border-surface-borderLight text-slate-300 font-medium">1.0x</span>
+          </div>
+
+          <!-- Acciones Rápidas -->
+          <div class="pt-3.5 border-t border-surface-border/60 flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center space-x-2">
+              <a id="detailDownloadBtn" href="" download class="inline-flex items-center space-x-2 bg-surface-input hover:bg-surface-border text-white text-xs px-3.5 py-2 rounded-xl border border-surface-borderLight transition-all font-semibold">
+                <span>⬇</span>
+                <span>Descargar Audio</span>
+              </a>
+              <button id="detailCopyBtn" class="inline-flex items-center space-x-2 bg-surface-input hover:bg-surface-border text-slate-300 hover:text-white text-xs px-3 py-2 rounded-xl border border-surface-borderLight transition-all">
+                <span>📋</span>
+                <span>Copiar texto</span>
+              </button>
+            </div>
+            
+            <button id="detailDeleteBtn" class="inline-flex items-center space-x-1.5 text-rose-400 hover:text-rose-300 text-xs px-3 py-2 rounded-xl hover:bg-rose-950/30 transition-all">
+              <span>🗑️</span>
+              <span>Mover a Papelera</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Metadatos de la Toma -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+          <div class="bg-surface-card border border-surface-border rounded-xl p-3 space-y-1 shadow-sm">
+            <span class="text-[10px] text-slate-400 uppercase font-semibold tracking-wider block">Voz & Modelo</span>
+            <p id="detailVoiceName" class="font-bold text-white truncate">Voz</p>
+            <p id="detailVoiceRef" class="text-[10px] font-mono text-slate-400 truncate">ID: -</p>
+            <span id="detailModelBadge" class="inline-block text-[10px] text-brand-400 font-mono bg-brand-500/15 px-2 py-0.5 rounded-md">s2.1-pro-free</span>
+          </div>
+
+          <div class="bg-surface-card border border-surface-border rounded-xl p-3 space-y-1 shadow-sm">
+            <span class="text-[10px] text-slate-400 uppercase font-semibold tracking-wider block">Ajustes de Prosodia</span>
+            <div class="space-y-0.5 text-[11px]">
+              <div class="flex justify-between"><span class="text-slate-400">Velocidad:</span> <span id="detailSpeedVal" class="text-slate-200 font-mono font-medium">1.0x</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Volumen:</span> <span id="detailVolumeVal" class="text-slate-200 font-mono font-medium">0 dB</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Normalización:</span> <span id="detailNormVal" class="text-emerald-400 font-medium">Activada</span></div>
+            </div>
+          </div>
+
+          <div class="bg-surface-card border border-surface-border rounded-xl p-3 space-y-1 shadow-sm">
+            <span class="text-[10px] text-slate-400 uppercase font-semibold tracking-wider block">Métricas</span>
+            <div class="space-y-0.5 text-[11px]">
+              <div class="flex justify-between"><span class="text-slate-400">Formato:</span> <span id="detailFormatVal" class="text-slate-200 font-mono font-medium">MP3</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Orden:</span> <span id="detailOrderVal" class="text-slate-200 font-mono font-medium">#1</span></div>
+              <div class="flex justify-between"><span class="text-slate-400">Hora:</span> <span id="detailDateVal" class="text-slate-200 font-mono font-medium">-</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Texto Completo Generado -->
+        <div class="space-y-2">
+          <span class="text-xs font-bold text-white tracking-wide block">Texto generado</span>
+          <div id="detailTextValue" class="bg-[#0f1118] border border-surface-border rounded-xl p-4 text-xs leading-relaxed text-slate-300 font-mono select-text shadow-inner max-h-48 overflow-y-auto">
+            -
+          </div>
+        </div>
+
+      </div>
+
+      <div class="px-6 py-4 border-t border-surface-border bg-surface-card/90 flex items-center justify-between">
+        <button id="detailCloseBottomBtn" class="px-4 py-2 rounded-xl border border-surface-borderLight text-slate-300 hover:text-white hover:bg-surface-input text-xs font-semibold transition-colors">
+          Cerrar [Esc]
+        </button>
+        <button id="detailEditPrompterBtn" class="px-4 py-2 rounded-xl bg-brand-500/15 hover:bg-brand-500 text-brand-300 hover:text-white border border-brand-500/30 text-xs font-semibold transition-all">
+          Cargar en Prompter
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- MODAL: RENOMBRAR PROYECTO -->
+  <div id="renameProjectModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden">
+    <div class="bg-surface-card border border-surface-borderLight/60 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
+      <div class="px-6 py-4 border-b border-surface-border flex items-center justify-between bg-surface-panel/50">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+            ✏️
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white tracking-wide">Renombrar Proyecto</h3>
+            <p class="text-[11px] font-mono text-slate-400">Actualiza el identificador del proyecto</p>
+          </div>
+        </div>
+        <button id="renameProjectCloseBtn" class="text-xs text-slate-400 hover:text-slate-200 bg-surface-input border border-surface-borderLight/40 px-2.5 py-1 rounded-lg transition-colors font-mono">
+          ✕ ESC
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4 text-xs">
+        <div class="space-y-1.5">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Nombre actual</span>
+          <div id="renameCurrentDisplay" class="bg-surface-panel/60 border border-surface-borderLight/40 rounded-xl px-3.5 py-2.5 text-slate-400 text-xs font-medium leading-relaxed truncate">
+            -
+          </div>
+        </div>
+
+        <div class="space-y-1.5">
+          <label class="text-xs font-semibold text-slate-200" for="renameProjectInput">
+            Nuevo nombre del proyecto <span class="text-brand-400">*</span>
+          </label>
+          <input id="renameProjectInput" class="w-full bg-surface-input border border-brand-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-400 font-medium tracking-wide shadow-inner-subtle" type="text" />
+        </div>
+      </div>
+
+      <div class="px-6 py-4 bg-surface-panel/60 border-t border-surface-border flex items-center justify-end space-x-3">
+        <button id="renameProjectCancelBtn" class="bg-surface-input hover:bg-surface-border text-slate-300 font-medium text-xs px-4 py-2.5 rounded-xl transition-colors border border-surface-borderLight/40">
+          Cancelar
+        </button>
+        <button id="renameProjectSaveBtn" class="bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-brand-500/20 transition-all flex items-center space-x-2">
+          <span>Guardar Cambios</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ELIMINAR PROYECTO -->
+  <div id="deleteProjectModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden" role="dialog">
+    <div class="bg-surface-card border border-surface-borderLight/60 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
+      <div class="px-6 py-4 border-b border-surface-border flex items-center justify-between bg-surface-panel/50">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+            ⚠️
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white tracking-wide">Eliminar Proyecto</h3>
+            <p class="text-[11px] font-mono text-slate-400">Acción destructiva</p>
+          </div>
+        </div>
+        <button id="deleteProjectCloseBtn" class="text-xs text-slate-400 hover:text-slate-200 bg-surface-input border border-surface-borderLight/40 px-2.5 py-1 rounded-lg transition-colors font-mono">
+          ✕ ESC
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4 text-xs">
+        <p class="text-slate-200 text-sm leading-relaxed">
+          ¿Estás seguro de que deseas eliminar el proyecto <span id="deleteProjectTargetName" class="font-bold text-white underline decoration-rose-500/50 underline-offset-2">«Proyecto»</span>?
+        </p>
+
+        <div class="bg-surface-panel/70 border border-surface-border rounded-xl p-4 space-y-3">
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="bg-surface-card border border-surface-borderLight/40 rounded-xl p-3">
+              <span class="text-[10px] text-slate-400 block font-semibold uppercase">Partes del proyecto</span>
+              <span id="deleteProjectPartsCount" class="text-xs font-bold text-white flex items-center gap-1.5 mt-1">
+                <span class="text-blue-400">📄</span> 1 Parte
+              </span>
+            </div>
+            <div class="bg-surface-card border border-surface-borderLight/40 rounded-xl p-3">
+              <span class="text-[10px] text-slate-400 block font-semibold uppercase">Tomas de audio</span>
+              <span id="deleteProjectAudiosCount" class="text-xs font-bold text-white flex items-center gap-1.5 mt-1">
+                <span class="text-emerald-400">🎵</span> 0 Tomas
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-6 py-4 bg-surface-panel/60 border-t border-surface-border flex items-center justify-end space-x-3">
+        <button id="deleteProjectCancelBtn" class="bg-surface-input hover:bg-surface-border text-slate-300 font-medium text-xs px-4 py-2.5 rounded-xl transition-colors border border-surface-borderLight/40">
+          Cancelar
+        </button>
+        <button id="deleteProjectConfirmBtn" class="bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-rose-600/25 transition-all flex items-center space-x-2">
+          <span>Eliminar Proyecto</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: IMPORTAR ARCHIVOS .TXT -->
+  <div id="batchImportModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md hidden" role="dialog">
+    <div class="relative w-full max-w-2xl max-h-[92vh] flex flex-col bg-surface-card border border-surface-borderLight/60 rounded-2xl shadow-2xl overflow-hidden z-10">
+      
+      <div class="flex items-center justify-between px-6 py-4 border-b border-surface-border bg-surface-panel/70 shrink-0">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/30 flex items-center justify-center text-brand-400 shadow-inner">
+            📥
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white tracking-wide">Importar Archivos de Texto (.txt)</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Divide tus textos largos en partes de proyecto organizadas.</p>
+          </div>
+        </div>
+        <button id="batchImportCloseBtn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-slate-400 hover:text-white bg-surface-input border border-surface-borderLight/40 transition-colors text-xs font-mono">
+          ✕ ESC
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+        <input id="txtFileInput" type="file" accept=".txt" multiple class="hidden" />
+        <div id="txtDropzone" class="border-2 border-dashed border-surface-borderLight hover:border-brand-500/70 bg-surface-panel/50 hover:bg-surface-panel/80 rounded-2xl p-8 text-center transition-all cursor-pointer group flex flex-col items-center justify-center space-y-2.5">
+          <div class="w-12 h-12 rounded-2xl bg-surface-input flex items-center justify-center text-brand-400 group-hover:scale-110 group-hover:bg-brand-500 group-hover:text-white transition-all shadow-md">
+            📄
+          </div>
+          <div>
+            <p class="text-xs font-bold text-white">Arrastra tus archivos <span class="text-brand-400 font-mono">.txt</span> aquí o haz clic para explorar</p>
+            <p class="text-[11px] text-slate-400 mt-1">Admite múltiples archivos .txt con codificación UTF-8.</p>
+          </div>
+          <button type="button" class="mt-2 bg-surface-input hover:bg-surface-border border border-surface-borderLight/60 text-slate-200 px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm">
+            Examinar archivos en tu PC
+          </button>
+        </div>
+
+        <div id="txtFilesQueueSection" class="space-y-2.5 hidden">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-white tracking-wide">Archivos Seleccionados</span>
+              <span id="txtFilesCountBadge" class="bg-brand-500/20 text-brand-300 font-mono text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-brand-500/30">0</span>
+            </div>
+            <button id="txtClearQueueBtn" class="text-[11px] text-slate-400 hover:text-rose-400 transition-colors">Vaciar lista</button>
+          </div>
+
+          <div id="txtFilesList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+        </div>
+
+        <div class="space-y-2 pt-3 border-t border-surface-border/60">
+          <label class="block font-semibold text-slate-300 uppercase tracking-wider text-[10px]">Destino de importación</label>
+          <div class="space-y-2">
+            <label class="flex items-start space-x-3 p-3 rounded-xl bg-surface-panel border border-brand-500/50 cursor-pointer shadow-sm">
+              <input checked class="mt-0.5 text-brand-500 bg-surface-input border-surface-borderLight focus:ring-0" name="txtImportDestination" type="radio" value="parts" />
+              <div class="text-xs">
+                <span class="font-bold text-white block">Crear una nueva Parte por cada archivo</span>
+                <span class="text-[11px] text-slate-400 leading-tight block mt-0.5">Se añadirán automáticamente dentro del proyecto activo</span>
+              </div>
+            </label>
+            <label class="flex items-start space-x-3 p-3 rounded-xl bg-surface-panel/40 border border-surface-borderLight/30 hover:border-surface-borderLight cursor-pointer">
+              <input class="mt-0.5 text-brand-500 bg-surface-input border-surface-borderLight focus:ring-0" name="txtImportDestination" type="radio" value="concat" />
+              <div class="text-xs">
+                <span class="font-semibold text-slate-300 block">Cargar en el editor de texto actual</span>
+                <span class="text-[11px] text-slate-400 leading-tight block mt-0.5">Inserta el texto unificado en el área de trabajo</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between px-6 py-4 border-t border-surface-border bg-surface-panel/80 shrink-0">
+        <div class="flex items-center space-x-2 text-[11px] text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span>Listo para procesar localmente</span>
+        </div>
+        <div class="flex items-center space-x-3">
+          <button id="batchImportCancelBtn" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-surface-input hover:bg-surface-border border border-surface-borderLight/40 transition-colors" type="button">
+            Cancelar
+          </button>
+          <button id="batchImportConfirmBtn" class="px-5 py-2 rounded-xl text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 active:bg-brand-700 shadow-lg shadow-brand-500/25 transition-all flex items-center space-x-2" type="button">
+            <span>Importar Archivos</span>
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- Audios Generados (Historia de la generación) -->
-    <div id="resultsSection" class="results-section">
-      <div class="section-header">
-        <div class="section-header-left">
-          <h3>Historia de la generación</h3>
-          <span id="currentScopeBadge" class="scope-badge">General / Parte 1</span>
-        </div>
-        <span id="audioCountBadge" class="audio-count-badge">0</span>
-      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PREVISUALIZAR Y EDITAR ARCHIVO DE TEXTO (.TXT) -->
+  <div id="txtEditorModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md hidden" role="dialog">
+    <div class="w-full max-w-6xl h-full max-h-[860px] bg-[#0e1117] border border-[#232936] rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden ring-1 ring-white/5" data-purpose="text-editor-modal">
       
-      <div id="audioCardsContainer" class="audio-cards-container">
-        <div id="resultsEmpty" class="results-empty">
-          <span class="empty-icon">🎧</span>
-          <p>Los audios que generes para esta parte se irán acumulando aquí en orden consecutivo (#1, #2, #3...).</p>
+      <!-- ModalHeader -->
+      <header class="bg-[#12161f] border-b border-[#212735] px-6 py-4 flex flex-wrap items-center justify-between gap-4 flex-shrink-0">
+        <div class="flex items-center gap-3.5">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0 shadow-inner">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2.5 flex-wrap">
+              <h1 class="text-base font-semibold text-slate-100 tracking-tight" id="txtEditorFileName">archivo.txt</h1>
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                UTF-8
+              </span>
+              <span id="txtEditorFileSize" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono text-slate-400 bg-slate-800/80 border border-slate-700/50">
+                0 KB
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+              <span>Inspección y limpieza previa para síntesis Fish TTS</span>
+              <span class="text-slate-600">•</span>
+              <span id="txtEditorCharHeader" class="text-blue-400/90 font-mono text-[11px]">0 caracteres</span>
+              <span class="text-slate-600">•</span>
+              <span id="txtEditorEstHeader" class="text-slate-300 font-mono text-[11px]">~0.0s estimados</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="hidden sm:flex items-center gap-2 bg-[#171c26] px-3 py-1.5 rounded-lg border border-slate-700/50 text-xs text-slate-300">
+            <span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>Edición activa</span>
+          </div>
+          <button id="txtEditorCloseBtn" class="text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 p-2 rounded-lg transition border border-transparent hover:border-slate-700 flex items-center gap-1.5 text-xs" type="button">
+            <span class="text-xs font-mono opacity-60">ESC</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- FileSwitcherTabs -->
+      <nav id="txtEditorFileTabs" class="bg-[#0f1218] border-b border-[#1f2533] px-6 flex items-center gap-2 overflow-x-auto text-xs flex-shrink-0" data-purpose="file-switcher">
+        <span class="text-slate-500 font-medium mr-1 uppercase text-[10px] tracking-wider">Archivos en cola:</span>
+      </nav>
+
+      <!-- CleaningToolbar -->
+      <div class="bg-[#12151d] border-b border-[#1f2430] px-6 py-2 flex items-center justify-between gap-3 text-xs overflow-x-auto flex-shrink-0" data-purpose="quick-tools-toolbar">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-slate-500 text-[11px] font-medium mr-1 flex items-center gap-1">
+            <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+            Herramientas de Limpieza:
+          </span>
+          <button id="cleanToolDashes" class="px-2.5 py-1.5 rounded-md bg-[#181d26] hover:bg-[#202734] border border-[#2b3342] text-slate-300 hover:text-white flex items-center gap-1.5 transition" title="Convierte guiones cortos en rayas largas de diálogo teatral (—)" type="button">
+            <span class="font-mono text-blue-400 font-bold">—</span>
+            <span>Unificar Guiones (—)</span>
+          </button>
+          <button id="cleanToolQuotes" class="px-2.5 py-1.5 rounded-md bg-[#181d26] hover:bg-[#202734] border border-[#2b3342] text-slate-300 hover:text-white flex items-center gap-1.5 transition" title="Estandarizar comillas inglesas o angulares a formato neutro de locución" type="button">
+            <span class="font-mono text-blue-400 font-bold">« »</span>
+            <span>Normalizar Comillas</span>
+          </button>
+          <button id="cleanToolBlankLines" class="px-2.5 py-1.5 rounded-md bg-[#181d26] hover:bg-[#202734] border border-[#2b3342] text-slate-300 hover:text-white flex items-center gap-1.5 transition" title="Eliminar saltos de línea repetidos de más de 2 retornos" type="button">
+            <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 14l-7 7m0 0l-7-7m7 7V3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+            <span>Quitar Líneas Vacías</span>
+          </button>
+          <button id="cleanToolPauseTags" class="px-2.5 py-1.5 rounded-md bg-[#181d26] hover:bg-[#202734] border border-[#2b3342] text-slate-300 hover:text-white flex items-center gap-1.5 transition" title="Insertar etiquetas de pausa [pause:500ms]" type="button">
+            <span class="text-blue-400 font-mono text-[11px]">[TTS]</span>
+            <span>Etiquetas de Pausa</span>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <div class="relative flex items-center">
+            <input id="txtSearchInput" class="bg-[#181d26] text-slate-200 placeholder-slate-500 text-xs px-2.5 py-1 pl-7 rounded-md border border-[#29303d] focus:outline-none focus:border-blue-500 w-44" placeholder="Buscar..." type="text" />
+            <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          </div>
+          <button id="txtResetOriginalBtn" class="p-1.5 rounded-md bg-[#181d26] border border-[#29303d] hover:border-slate-600 text-slate-400 hover:text-slate-200" title="Restaurar texto original" type="button">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          </button>
         </div>
       </div>
-    </div>
 
-    <!-- Biblioteca My Voice -->
-    <div class="library-section">
-      <div class="section-header">
-        <h3>Biblioteca My Voice</h3>
-      </div>
-      <div id="libraryList" class="library-list">
-        <!-- Voces del usuario renderizadas con estilo de tarjeta -->
-      </div>
-    </div>
-
-    <p id="errorBox" class="error-box hidden"></p>
-  </section>
-
-  <!-- ------------------------------------------------------------ panel derecho -->
-  <section class="side-panel">
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="ajustes">Ajustes</button>
-      <button class="tab-btn" data-tab="historia">Historial</button>
-      <button class="tab-btn" data-tab="papelera">Papelera <span id="trashCountBadge" class="trash-count-badge">0</span></button>
-    </div>
-
-    <!-- Ajustes -->
-    <div id="tab-ajustes" class="tab-content active">
-      <div class="field-group">
-        <label>Clave de API de Fish Audio</label>
-        <div class="input-row">
-          <input id="apiKeyInput" type="password" placeholder="fs_..." autocomplete="off">
-          <button id="saveKeyBtn" class="mini-btn">Guardar</button>
+      <!-- TextEditorBody -->
+      <section class="flex-1 flex overflow-hidden bg-[#0a0c10] relative" data-purpose="editor-canvas">
+        <aside id="txtLineNumbersGutter" aria-hidden="true" class="line-numbers-col w-14 bg-[#0d0f14] border-r border-[#1a1f2c] py-4 px-2 font-mono text-[13px] text-slate-600 text-right select-none space-y-[6px] flex-shrink-0 overflow-y-hidden">
+          <div>001</div>
+        </aside>
+        <div class="flex-1 relative flex flex-col h-full overflow-y-auto p-4 md:p-6 font-mono text-[13.5px] leading-[26px]">
+          <textarea id="txtEditorContent" class="w-full h-full bg-transparent text-slate-200 resize-none border-0 focus:ring-0 p-0 focus:outline-none font-mono text-[13.5px] leading-[26px] tracking-normal selection:bg-blue-600/40 selection:text-white" spellcheck="false" style="min-height: 480px;"></textarea>
+          <div id="txtCursorPositionPill" class="absolute bottom-4 right-6 bg-[#161a24]/90 backdrop-blur border border-slate-700/60 rounded px-2.5 py-1 text-[11px] font-mono text-slate-400 pointer-events-none shadow-lg">
+            Modo de Edición Directa
+          </div>
         </div>
-        <p class="hint">Consíguela en <a href="https://fish.audio" target="_blank" rel="noopener">fish.audio</a>. Se guarda solo localmente.</p>
-      </div>
+      </section>
 
-      <div class="field-group">
-        <label>Agregar nueva voz</label>
-        <div class="input-row" style="margin-bottom: 8px;">
-          <input id="newVoiceName" type="text" placeholder="Nombre (ej. Junior Cajour)">
+      <!-- TelemetryBar -->
+      <section class="bg-[#10131a] border-t border-[#1d2330] px-6 py-2.5 flex flex-wrap items-center justify-between gap-4 text-xs font-mono text-slate-400 flex-shrink-0" data-purpose="telemetry-footer-bar">
+        <div class="flex items-center gap-4 flex-wrap">
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-500">Caracteres:</span>
+            <span id="txtTelemetryChars" class="text-slate-200 font-semibold">0</span>
+          </div>
+          <span class="text-slate-700">|</span>
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-500">Palabras:</span>
+            <span id="txtTelemetryWords" class="text-slate-200 font-semibold">0</span>
+          </div>
+          <span class="text-slate-700">|</span>
+          <div class="flex items-center gap-1.5">
+            <span class="text-slate-500">Párrafos calculados:</span>
+            <span id="txtTelemetryParagraphs" class="text-slate-200 font-semibold">0 bloques</span>
+          </div>
+          <span class="text-slate-700">|</span>
+          <div class="flex items-center gap-1.5 text-blue-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+            <span>Estimación Audio (TTS): <strong id="txtTelemetryEstDuration" class="text-blue-300 font-bold">~0s</strong></span>
+          </div>
         </div>
-        <div class="input-row">
-          <input id="newVoiceId" type="text" placeholder="reference_id de la voz">
-          <button id="addVoiceBtn" class="mini-btn">+</button>
+        <div class="flex items-center gap-2 text-[11px] text-slate-400">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          <span>Sincronizado con memoria del lote</span>
         </div>
-        <p class="hint">El reference_id se obtiene de tu biblioteca en fish.audio.</p>
-      </div>
+      </section>
 
-      <div class="field-group">
-        <label>Formato de salida</label>
-        <select id="formatSelect">
-          <option value="mp3">MP3</option>
-          <option value="wav">WAV</option>
-          <option value="opus">Opus</option>
-        </select>
-      </div>
-
-      <div class="field-group two-col">
-        <div>
-          <label>Velocidad <span id="speedVal">1.0x</span></label>
-          <input id="speedRange" type="range" min="0.5" max="2" step="0.05" value="1">
+      <!-- ModalActionFooter -->
+      <footer class="bg-[#121620] border-t border-[#222837] px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 flex-shrink-0">
+        <div class="flex items-center gap-2 text-xs text-slate-400">
+          <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+          </svg>
+          <span class="leading-tight">
+            Modificaciones conservadas en memoria de sesión (el archivo <code class="text-slate-300 bg-slate-800 px-1 py-0.5 rounded text-[11px]">.txt</code> original en disco permanece intacto).
+          </span>
         </div>
-        <div>
-          <label>Volumen <span id="volumeVal">0</span></label>
-          <input id="volumeRange" type="range" min="-20" max="20" step="1" value="0">
+        <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <button id="txtEditorDiscardBtn" class="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-[#1a202c] hover:bg-[#232a3b] border border-slate-700/70 transition" type="button">
+            Descartar Cambios [Esc]
+          </button>
+          <button id="txtEditorSaveBtn" class="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 active:bg-blue-700 transition shadow-[0_4px_16px_rgba(37,99,235,0.35)] flex items-center justify-center gap-2 border border-blue-400/30" type="button">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+            </svg>
+            <span>Guardar Cambios en Cola</span>
+          </button>
         </div>
-      </div>
+      </footer>
 
-      <div class="field-group toggle-row">
-        <label for="normalizeToggle">Normalización de texto</label>
-        <input id="normalizeToggle" type="checkbox" checked>
-      </div>
-    </div>
-
-    <!-- Historial Simplificado -->
-    <div id="tab-historia" class="tab-content">
-      <div id="historyEmpty" class="history-empty">Todavía no has generado nada.</div>
-      <div id="historyList" class="history-list"></div>
-    </div>
-
-    <!-- Papelera -->
-    <div id="tab-papelera" class="tab-content">
-      <div class="trash-header">
-        <span>Audios eliminados</span>
-        <button id="emptyTrashBtn" class="mini-btn danger-btn hidden">Vaciar papelera</button>
-      </div>
-      <div id="trashEmpty" class="history-empty">La papelera está vacía.</div>
-      <div id="trashList" class="history-list"></div>
-    </div>
-  </section>
-</main>
-
-<audio id="audioPlayer" class="hidden"></audio>
-
-<!-- Modal de Confirmación -->
-<div id="confirmModal" class="modal-overlay hidden">
-  <div class="modal-card">
-    <div class="modal-header">
-      <span id="confirmModalTitle">🗑️ Mover a la papelera</span>
-      <button id="confirmModalCloseBtn" class="modal-close-btn">✕</button>
-    </div>
-    <p id="confirmModalText" class="modal-text">¿Estás seguro de que quieres mover este audio a la papelera?</p>
-    <div class="modal-actions">
-      <button id="confirmModalCancelBtn" class="modal-btn secondary-btn">Cancelar</button>
-      <button id="confirmModalOkBtn" class="modal-btn danger-btn">Mover a la papelera</button>
     </div>
   </div>
-</div>
 
-<!-- Modal / Popup de Detalles Suave -->
-<div id="detailsModal" class="modal-overlay hidden">
-  <div class="detail-modal-card">
-    <div class="modal-header">
-      <span class="detail-title">🔍 Detalles de la Generación</span>
-      <button id="detailsModalCloseBtn" class="modal-close-btn">✕</button>
-    </div>
-    
-    <div class="detail-grid">
-      <div class="detail-item">
-        <span class="detail-item-label">Proyecto / Parte</span>
-        <span id="detailProjectValue" class="detail-item-value">-</span>
+  <!-- MODAL: CONFIRMACIÓN GENÉRICO -->
+  <div id="confirmModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden" role="dialog">
+    <div class="bg-surface-card border border-surface-borderLight/60 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col p-6 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-surface-border">
+        <span id="confirmModalTitle" class="text-sm font-bold text-white flex items-center gap-2">Confirmación</span>
+        <button id="confirmModalCloseBtn" class="text-slate-400 hover:text-white text-xs font-mono">✕</button>
       </div>
-      <div class="detail-item">
-        <span class="detail-item-label">Orden en la parte</span>
-        <span id="detailOrderValue" class="detail-item-value">-</span>
+      <p id="confirmModalText" class="text-xs text-slate-300 leading-relaxed font-medium">¿Estás seguro de realizar esta acción?</p>
+      <div class="flex items-center justify-end space-x-3 pt-2">
+        <button id="confirmModalCancelBtn" class="px-4 py-2 rounded-xl border border-surface-borderLight text-slate-300 hover:text-white hover:bg-surface-input text-xs font-semibold transition-colors">
+          Cancelar
+        </button>
+        <button id="confirmModalOkBtn" class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md transition-all">
+          Aceptar
+        </button>
       </div>
-      <div class="detail-item">
-        <span class="detail-item-label">Modelo</span>
-        <span id="detailModelValue" class="detail-item-value">-</span>
-      </div>
-      <div class="detail-item">
-        <span class="detail-item-label">Voz</span>
-        <span id="detailVoiceValue" class="detail-item-value">-</span>
-      </div>
-      <div class="detail-item">
-        <span class="detail-item-label">Fecha y Hora</span>
-        <span id="detailDateValue" class="detail-item-value">-</span>
-      </div>
-      <div class="detail-item">
-        <span class="detail-item-label">Configuración</span>
-        <span id="detailConfigValue" class="detail-item-value">-</span>
-      </div>
-    </div>
-
-    <div class="detail-item">
-      <span class="detail-item-label" style="margin-bottom: 6px;">Texto Generado</span>
-      <div id="detailTextValue" class="detail-text-box"></div>
-    </div>
-
-    <!-- Reproductor dentro del popup -->
-    <div class="detail-player-bar">
-      <button id="detailPlayBtn" class="detail-play-btn">▶</button>
-      <input id="detailSlider" type="range" min="0" max="100" value="0" class="detail-slider">
-      <span id="detailTime" class="detail-time">0:00 / 0:00</span>
-    </div>
-
-    <div class="modal-actions" style="margin-top: 10px;">
-      <button id="detailCopyBtn" class="modal-btn secondary-btn">📋 Copiar texto</button>
-      <a id="detailDownloadBtn" href="" download class="modal-btn secondary-btn" style="text-decoration: none; text-align: center; display: inline-block;">⬇ Descargar</a>
-      <button id="detailDeleteBtn" class="modal-btn danger-btn">🗑 Papelera</button>
     </div>
   </div>
-</div>
 
-<!-- Modal para Crear Proyecto -->
-<div id="projectModal" class="modal-overlay hidden">
-  <div class="modal-card">
-    <div class="modal-header">
-      <span>📁 Nuevo Proyecto</span>
-      <button id="projectModalCloseBtn" class="modal-close-btn">✕</button>
-    </div>
-    <div class="field-group" style="margin-bottom: 16px;">
-      <label for="newProjectNameInput">Nombre del proyecto</label>
-      <input id="newProjectNameInput" type="text" placeholder="Ej: Audiolibro Capítulo 1, Video YouTube..." autofocus>
-    </div>
-    <div class="modal-actions">
-      <button id="projectModalCancelBtn" class="modal-btn secondary-btn">Cancelar</button>
-      <button id="projectModalSaveBtn" class="modal-btn primary-btn">Crear proyecto</button>
-    </div>
-  </div>
-</div>
+  <audio id="audioPlayer" class="hidden"></audio>
 
-<!-- Modal para Crear Parte -->
-<div id="partModal" class="modal-overlay hidden">
-  <div class="modal-card">
-    <div class="modal-header">
-      <span>📑 Nueva Parte</span>
-      <button id="partModalCloseBtn" class="modal-close-btn">✕</button>
-    </div>
-    <div class="field-group" style="margin-bottom: 16px;">
-      <label for="newPartNameInput">Nombre de la parte / sección</label>
-      <input id="newPartNameInput" type="text" placeholder="Ej: Parte 2, Introducción, Escena 1...">
-    </div>
-    <div class="modal-actions">
-      <button id="partModalCancelBtn" class="modal-btn secondary-btn">Cancelar</button>
-      <button id="partModalSaveBtn" class="modal-btn primary-btn">Crear parte</button>
-    </div>
-  </div>
-</div>
-
-<script type="module" src="/static/js/app.js"></script>
+  <!-- Script con reactividad y micro-interacciones de estudio -->
+  <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>
