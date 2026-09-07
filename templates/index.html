@@ -369,18 +369,32 @@
       <!-- Contenido de la pestaña: Ajustes -->
       <div id="tab-ajustes" class="tab-content active flex-1 overflow-y-auto p-5 space-y-6 text-xs">
         
-        <!-- Grupo 1: Clave de API -->
-        <div class="space-y-2" data-purpose="api-key-group">
-          <label class="block font-semibold text-slate-300 uppercase tracking-wider text-[10px]" for="apiKeyInput">Clave de API de Fish Audio</label>
-          <div class="flex space-x-2">
-            <input id="apiKeyInput" class="w-full bg-surface-input border border-surface-borderLight/60 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 font-mono shadow-inner-subtle" placeholder="fs_..." type="password" autocomplete="off" />
-            <button id="saveKeyBtn" class="bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 shadow-md shadow-brand-500/20">
-              Guardar
-            </button>
+        <!-- Grupo 1: Pool de Claves de API (Multi-API) -->
+        <div class="space-y-2.5" data-purpose="api-key-group">
+          <div class="flex items-center justify-between">
+            <label class="block font-semibold text-slate-300 uppercase tracking-wider text-[10px]">Claves de API (Pool)</label>
+            <span id="apiPoolCapacityBadge" class="bg-brand-500/15 text-brand-300 font-mono text-[10px] font-bold px-2 py-0.5 rounded border border-brand-500/30">
+              0 Claves · 5 hilos
+            </span>
           </div>
-          <p class="text-[11px] text-slate-400 leading-relaxed">
-            Consíguela en <a class="text-brand-400 hover:underline font-medium" href="https://fish.audio" target="_blank" rel="noopener">fish.audio</a>. Se guarda solo en tu equipo.
-          </p>
+
+          <!-- Lista de claves configuradas -->
+          <div id="apiKeysList" class="space-y-1.5 max-h-36 overflow-y-auto">
+            <!-- Renderizado dinámicamente -->
+          </div>
+
+          <!-- Input para agregar nueva clave -->
+          <div class="space-y-1.5 pt-1">
+            <div class="flex space-x-2">
+              <input id="apiKeyInput" class="w-full bg-surface-input border border-surface-borderLight/60 rounded-xl px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 font-mono shadow-inner-subtle" placeholder="fs_..." type="password" autocomplete="off" />
+              <button id="addKeyBtn" class="bg-brand-500 hover:bg-brand-600 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 shadow-md shadow-brand-500/20" title="Añadir clave al pool">
+                + Añadir
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-relaxed">
+              Cada clave activa añade <strong>5 hilos concurrentes</strong>. El motor distribuye automáticamente las peticiones y rota de clave si alguna satura su límite.
+            </p>
+          </div>
         </div>
 
         <!-- Grupo 2: Añadir Voz -->
@@ -850,9 +864,16 @@
           <label class="block font-semibold text-slate-300 uppercase tracking-wider text-[10px]">Destino de importación</label>
           <div class="space-y-2">
             <label class="flex items-start space-x-3 p-3 rounded-xl bg-surface-panel border border-brand-500/50 cursor-pointer shadow-sm">
-              <input checked class="mt-0.5 text-brand-500 bg-surface-input border-surface-borderLight focus:ring-0" name="txtImportDestination" type="radio" value="parts" />
+              <input checked class="mt-0.5 text-brand-500 bg-surface-input border-surface-borderLight focus:ring-0" name="txtImportDestination" type="radio" value="generate_separate" />
               <div class="text-xs">
-                <span class="font-bold text-white block">Crear una nueva Parte por cada archivo</span>
+                <span class="font-bold text-white block">Generar tomas separadas automáticamente en cola (Recomendado)</span>
+                <span class="text-[11px] text-slate-400 leading-tight block mt-0.5">Cada archivo .txt se envía como una toma independiente a la cola con la voz activa sin mezclar textos.</span>
+              </div>
+            </label>
+            <label class="flex items-start space-x-3 p-3 rounded-xl bg-surface-panel/40 border border-surface-borderLight/30 hover:border-surface-borderLight cursor-pointer">
+              <input class="mt-0.5 text-brand-500 bg-surface-input border-surface-borderLight focus:ring-0" name="txtImportDestination" type="radio" value="parts" />
+              <div class="text-xs">
+                <span class="font-semibold text-slate-300 block">Crear una nueva Parte por cada archivo (sin generar aún)</span>
                 <span class="text-[11px] text-slate-400 leading-tight block mt-0.5">Se añadirán automáticamente dentro del proyecto activo</span>
               </div>
             </label>

@@ -1,6 +1,6 @@
 import { animate } from "https://esm.sh/motion@11.11.13";
 
-const MAX_CONCURRENT_JOBS = 5;
+let MAX_CONCURRENT_JOBS = 5;
 let activeJobsCount = 0;
 let currentPlayingAudio = null;
 let currentPlayingCardId = null;
@@ -45,9 +45,11 @@ const els = {
   openAddVoiceBtn: document.getElementById('openAddVoiceBtn'),
   voiceList: document.getElementById('libraryList'),
 
-  // Sidebar - Ajustes
+  // Sidebar - Ajustes (Multi-API Pool)
+  apiKeysList: document.getElementById('apiKeysList'),
+  apiPoolCapacityBadge: document.getElementById('apiPoolCapacityBadge'),
   apiKeyInput: document.getElementById('apiKeyInput'),
-  saveKeyBtn: document.getElementById('saveKeyBtn'),
+  addKeyBtn: document.getElementById('addKeyBtn'),
   newVoiceName: document.getElementById('newVoiceName'),
   newVoiceId: document.getElementById('newVoiceId'),
   addVoiceBtn: document.getElementById('addVoiceBtn'),
@@ -187,6 +189,8 @@ let state = {
   projects: [],
   activeProjectId: 'default',
   activePartId: 'part-1',
+  apiKeysList: [],
+  apiKeysCount: 0,
 };
 
 let totalGeneratedAudios = 0;
@@ -382,7 +386,7 @@ function openDetailsModal(entry) {
   els.detailPlayIcon.textContent = '▶';
   els.detailSlider.value = 0;
   els.detailCurrentTime.textContent = '00:00.0';
-  els.detailTotalTime.textContent = '00:00.0';
+  els.detailTotalTime.textContent = entry.duration ? fmtDetailedTime(entry.duration) : '00:00.0';
 
   const togglePlay = () => {
     if (modalAudio.paused) {
@@ -407,7 +411,9 @@ function openDetailsModal(entry) {
   };
 
   modalAudio.onloadedmetadata = () => {
-    els.detailTotalTime.textContent = fmtDetailedTime(modalAudio.duration);
+    if (modalAudio.duration && isFinite(modalAudio.duration)) {
+      els.detailTotalTime.textContent = fmtDetailedTime(modalAudio.duration);
+    }
   };
 
   modalAudio.onended = () => {
@@ -821,9 +827,41 @@ if (els.quickUploadTxtBtn) {
 els.batchImportConfirmBtn.addEventListener('click', async () => {
   if (importedFilesData.length === 0) return;
 
-  const dest = document.querySelector('input[name="txtImportDestination"]:checked')?.value || 'parts';
+  const dest = document.querySelector('input[name="txtImportDestination"]:checked')?.value || 'generate_separate';
 
-  if (dest === 'parts') {
+  if (dest === 'generate_separate') {
+    if (!state.hasApiKey) {
+      showError('Agrega al menos una clave de API en Ajustes antes de generar.');
+      closeBatchImportModal();
+      return;
+    }
+
+    const filesToProcess = [...importedFilesData];
+    closeBatchImportModal();
+
+    let queueIdx = 0;
+    const runWorker = async () => {
+      while (queueIdx < filesToProcess.length) {
+        const file = filesToProcess[queueIdx++];
+        const content = file.content ? file.content.trim() : '';
+        if (!content) continue;
+        try {
+          await dispatchTtsJob(content);
+        } catch (err) {
+          console.error(`Error procesando archivo ${file.name}:`, err);
+        }
+      }
+    };
+
+    const workersCount = Math.min(MAX_CONCURRENT_JOBS, filesToProcess.length);
+    const workers = [];
+    for (let w = 0; w < workersCount; w++) {
+      workers.push(runWorker());
+    }
+    await Promise.all(workers);
+    importedFilesData = [];
+    renderImportedFiles();
+  } else if (dest === 'parts') {
     for (const f of importedFilesData) {
       const partName = f.name.replace(/\.txt$/i, '');
       await fetchJSON(`/api/projects/${state.activeProjectId}/parts`, 'POST', { name: partName });
@@ -832,13 +870,13 @@ els.batchImportConfirmBtn.addEventListener('click', async () => {
     state.projects = projects;
     renderParts();
     updateScopeBadge();
+    closeBatchImportModal();
   } else {
     const fullText = importedFilesData.map(f => f.content).join('\n\n');
     els.textInput.value = fullText;
     updateCharAndEstimate();
+    closeBatchImportModal();
   }
-
-  closeBatchImportModal();
 });
 
 // -------------------------------------------------- txt editor & preview modal --
@@ -1101,6 +1139,9 @@ async function init() {
   state.hasApiKey = cfg.has_api_key;
   state.voices = cfg.voices || [];
   state.config = cfg;
+  state.apiKeysList = cfg.api_keys_list || [];
+  state.apiKeysCount = cfg.api_keys_count || 0;
+  MAX_CONCURRENT_JOBS = cfg.max_concurrent_jobs || Math.max(5, (state.apiKeysCount || 1) * 5);
   state.projects = projects && projects.length > 0 ? projects : [
     { id: 'default', name: 'General', parts: [{ id: 'part-1', name: 'Parte 1' }] }
   ];
@@ -1109,6 +1150,7 @@ async function init() {
   state.activePartId = cfg.active_part_id || 'part-1';
 
   updateApiStatus();
+  renderApiKeys();
   renderVoices();
   renderProjects();
 
@@ -1129,12 +1171,14 @@ async function init() {
 }
 
 function updateApiStatus() {
+  const count = state.apiKeysCount || (state.hasApiKey ? 1 : 0);
+  const threads = MAX_CONCURRENT_JOBS || Math.max(5, count * 5);
   if (state.hasApiKey) {
     els.apiStatusContainer.className = 'flex items-center space-x-2.5 bg-surface-panel/90 border border-emerald-950/70 text-emerald-400 text-xs px-3.5 py-1.5 rounded-full shadow-inner-subtle';
     els.apiStatusDot.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-glow-emerald';
     els.apiStatusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
     els.apiStatusPing.classList.remove('hidden');
-    els.apiStatusText.textContent = 'Clave de API configurada';
+    els.apiStatusText.textContent = `${count} ${count === 1 ? 'clave activa' : 'claves activas'} (${threads} hilos)`;
   } else {
     els.apiStatusContainer.className = 'flex items-center space-x-2.5 bg-surface-panel/90 border border-rose-950/70 text-rose-400 text-xs px-3.5 py-1.5 rounded-full shadow-inner-subtle';
     els.apiStatusDot.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500';
@@ -1235,16 +1279,91 @@ async function deleteVoice(i) {
   renderVoices();
 }
 
-// --------------------------------------------------------------- config --
-els.saveKeyBtn.addEventListener('click', async () => {
-  const api_key = els.apiKeyInput.value.trim();
-  if (!api_key) return;
-  await fetchJSON('/api/config', 'POST', { api_key });
-  state.hasApiKey = true;
-  els.apiKeyInput.value = '';
-  els.apiKeyInput.placeholder = 'Clave guardada ✓';
-  updateApiStatus();
-});
+// --------------------------------------------------------------- config & api pool --
+function renderApiKeys() {
+  if (!els.apiKeysList) return;
+  els.apiKeysList.innerHTML = '';
+
+  const keys = state.apiKeysList || [];
+  const totalThreads = Math.max(5, keys.length * 5);
+  if (els.apiPoolCapacityBadge) {
+    els.apiPoolCapacityBadge.textContent = `${keys.length} ${keys.length === 1 ? 'clave activa' : 'claves activas'} · ${totalThreads} hilos`;
+  }
+
+  if (keys.length === 0) {
+    els.apiKeysList.innerHTML = `
+      <div class="text-[11px] text-slate-500 italic py-2 px-3 bg-surface-panel/40 rounded-xl border border-dashed border-surface-borderLight/30 text-center">
+        No hay claves en el pool. Añade una para comenzar.
+      </div>`;
+    return;
+  }
+
+  keys.forEach((k) => {
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between bg-surface-panel/80 border border-surface-borderLight/50 rounded-xl px-3 py-2 text-xs font-mono shadow-sm';
+    row.innerHTML = `
+      <div class="flex items-center space-x-2 min-w-0">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+        <span class="text-slate-200 truncate font-semibold">${escapeHtml(k.preview)}</span>
+        <span class="text-[10px] text-brand-400 bg-brand-500/10 px-1.5 py-0.5 rounded font-sans shrink-0">5 hilos</span>
+      </div>
+      <button class="delete-key-btn text-slate-400 hover:text-rose-400 p-1 rounded-lg hover:bg-surface-input transition-colors shrink-0" title="Eliminar clave">
+        ✕
+      </button>
+    `;
+    row.querySelector('.delete-key-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await removeApiKey(k.index);
+    });
+    els.apiKeysList.appendChild(row);
+  });
+}
+
+async function addApiKey() {
+  if (!els.apiKeyInput) return;
+  const key = els.apiKeyInput.value.trim();
+  if (!key) return;
+  try {
+    const cfg = await fetchJSON('/api/config/keys', 'POST', { api_key: key });
+    state.hasApiKey = cfg.has_api_key;
+    state.config = cfg;
+    state.apiKeysList = cfg.api_keys_list || [];
+    state.apiKeysCount = cfg.api_keys_count || 0;
+    MAX_CONCURRENT_JOBS = cfg.max_concurrent_jobs || Math.max(5, state.apiKeysCount * 5);
+    els.apiKeyInput.value = '';
+    renderApiKeys();
+    updateApiStatus();
+  } catch (err) {
+    showError(`Error al añadir clave de API: ${err}`);
+  }
+}
+
+async function removeApiKey(index) {
+  try {
+    const cfg = await fetchJSON(`/api/config/keys/${index}`, 'DELETE');
+    state.hasApiKey = cfg.has_api_key;
+    state.config = cfg;
+    state.apiKeysList = cfg.api_keys_list || [];
+    state.apiKeysCount = cfg.api_keys_count || 0;
+    MAX_CONCURRENT_JOBS = cfg.max_concurrent_jobs || Math.max(5, state.apiKeysCount * 5);
+    renderApiKeys();
+    updateApiStatus();
+  } catch (err) {
+    showError(`Error al eliminar clave: ${err}`);
+  }
+}
+
+if (els.addKeyBtn) {
+  els.addKeyBtn.addEventListener('click', addApiKey);
+}
+if (els.apiKeyInput) {
+  els.apiKeyInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addApiKey();
+    }
+  });
+}
 
 function setupAutoSave() {
   const saveFunc = async () => {
@@ -1276,18 +1395,7 @@ function setupAutoSave() {
   });
 }
 
-// ------------------------------------------------------------- generate --
-async function generate() {
-  hideError();
-  const text = els.textInput.value.trim();
-  if (!text) { showError('Escribe algo de texto primero.'); return; }
-  if (!state.hasApiKey) { showError('Agrega tu clave de API en Ajustes antes de generar.'); return; }
-
-  if (activeJobsCount >= MAX_CONCURRENT_JOBS) {
-    showError(`Has alcanzado el límite máximo de ${MAX_CONCURRENT_JOBS} solicitudes simultáneas.`);
-    return;
-  }
-
+async function dispatchTtsJob(text) {
   const payload = {
     text,
     reference_id: els.voiceSelect.value,
@@ -1300,10 +1408,8 @@ async function generate() {
   };
 
   activeJobsCount++;
+  updateQueueBadge();
   if (els.resultsEmpty) els.resultsEmpty.classList.add('hidden');
-
-  els.textInput.value = '';
-  updateCharAndEstimate();
 
   try {
     const res = await fetch('/api/generate', {
@@ -1312,16 +1418,39 @@ async function generate() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-
     if (!res.ok) {
-      showError(data.error || 'Error al enviar petición al servidor.');
       activeJobsCount--;
-    } else {
-      startPolling();
+      updateQueueBadge();
+      throw new Error(data.error || 'Error al enviar petición al servidor.');
     }
+    startPolling();
+    return data;
   } catch (err) {
-    showError(`Error de conexión: ${err}`);
     activeJobsCount--;
+    updateQueueBadge();
+    throw err;
+  }
+}
+
+// ------------------------------------------------------------- generate --
+async function generate() {
+  hideError();
+  const text = els.textInput.value.trim();
+  if (!text) { showError('Escribe algo de texto primero.'); return; }
+  if (!state.hasApiKey) { showError('Agrega tu clave de API en Ajustes antes de generar.'); return; }
+
+  if (activeJobsCount >= MAX_CONCURRENT_JOBS) {
+    showError(`Has alcanzado el límite de ${MAX_CONCURRENT_JOBS} solicitudes simultáneas.`);
+    return;
+  }
+
+  els.textInput.value = '';
+  updateCharAndEstimate();
+
+  try {
+    await dispatchTtsJob(text);
+  } catch (err) {
+    showError(`Error al generar: ${err.message || err}`);
   }
 }
 
@@ -1455,7 +1584,7 @@ function renderAudioCard(entry) {
         </div>
         <div class="flex justify-between text-[10px] font-mono text-slate-400">
           <span class="card-cur-time font-medium text-brand-400">00:00.0</span>
-          <span class="card-tot-time">00:00.0</span>
+          <span class="card-tot-time">${entry.duration ? fmtDetailedTime(entry.duration) : '00:00.0'}</span>
         </div>
       </div>
       <span class="text-[10px] font-mono text-slate-400 bg-surface-card px-2 py-0.5 rounded-md border border-surface-borderLight/40">${speedStr}</span>
@@ -1475,6 +1604,17 @@ function renderAudioCard(entry) {
   const scrubberTrack = card.querySelector('.card-scrubber-track');
   const downloadBtn = card.querySelector('.card-download-btn');
   const deleteBtn = card.querySelector('.card-delete-btn');
+
+  if (!entry.duration) {
+    const tmpAudio = new Audio(audioUrl);
+    tmpAudio.preload = 'metadata';
+    tmpAudio.onloadedmetadata = () => {
+      if (tmpAudio.duration && isFinite(tmpAudio.duration)) {
+        entry.duration = tmpAudio.duration;
+        totTimeEl.textContent = fmtDetailedTime(tmpAudio.duration);
+      }
+    };
+  }
 
   playBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1667,7 +1807,7 @@ async function loadHistory() {
       <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
         <span class="text-brand-400 font-bold">#${item.order_index || activeHistory.length - idx}</span>
         <span class="truncate max-w-[170px]">${escapeHtml(projName)} (${escapeHtml(partName)})</span>
-        <span>${timeLabel}</span>
+        <span>${item.duration ? fmtDetailedTime(item.duration) + ' · ' : ''}${timeLabel}</span>
       </div>
       <div class="text-xs text-slate-300 line-clamp-2 leading-relaxed">${escapeHtml(item.text)}</div>
       <div class="flex items-center justify-end space-x-2 pt-2 border-t border-surface-border/50">

@@ -61,6 +61,7 @@ file_lock = threading.Lock()
 
 DEFAULT_CONFIG = {
     "api_key": "",
+    "api_keys": [],        # ["fs_...", "fs_..."] Pool de múltiples claves
     "voices": [],          # [{ "name": "Narrador v2", "reference_id": "xxxx" }]
     "default_model": "s2.1-pro-free",
     "format": "mp3",
@@ -88,8 +89,46 @@ app = Flask(
     static_folder=str(STATIC_DIR)
 )
 
+# Gestor de concurrencia y balanceo de carga para pool de API keys
+key_in_flight = defaultdict(int)
+key_lock = threading.Lock()
+
+
+def acquire_api_key(cfg, exclude_keys=None):
+    if exclude_keys is None:
+        exclude_keys = set()
+    with key_lock:
+        keys = [k.strip() for k in cfg.get("api_keys", []) if isinstance(k, str) and k.strip() and k not in exclude_keys]
+        if not keys and cfg.get("api_key") and cfg["api_key"].strip() not in exclude_keys:
+            keys = [cfg["api_key"].strip()]
+        if not keys:
+            return None
+        # Balanceo least-connections: selecciona la clave con menos peticiones activas
+        chosen_key = min(keys, key=lambda k: key_in_flight[k])
+        key_in_flight[chosen_key] += 1
+        return chosen_key
+
+
+def release_api_key(key):
+    if not key:
+        return
+    with key_lock:
+        key_in_flight[key] = max(0, key_in_flight[key] - 1)
+
 
 # ---------------------------------------------------------------- helpers --
+def get_file_duration(filename: str) -> float:
+    """Calcula la duración real de un archivo de audio en segundos."""
+    audio_path = AUDIO_DIR / filename
+    if not audio_path.exists():
+        return 0.0
+    try:
+        seg = AudioSegment.from_file(audio_path)
+        return round(seg.duration_seconds, 1)
+    except Exception:
+        return 0.0
+
+
 def load_json(path: Path, default):
     if not path.exists():
         return default
@@ -111,6 +150,14 @@ def load_config():
     cfg = load_json(CONFIG_PATH, dict(DEFAULT_CONFIG))
     for key, value in DEFAULT_CONFIG.items():
         cfg.setdefault(key, value)
+    
+    # Asegurar y sincronizar api_keys y api_key
+    if not isinstance(cfg.get("api_keys"), list):
+        cfg["api_keys"] = []
+    if cfg.get("api_key") and cfg["api_key"] not in cfg["api_keys"]:
+        cfg["api_keys"].insert(0, cfg["api_key"])
+    if not cfg.get("api_key") and cfg["api_keys"]:
+        cfg["api_key"] = cfg["api_keys"][0]
     return cfg
 
 
@@ -128,7 +175,6 @@ def save_projects(data):
 
 def load_history():
     items = load_json(HISTORY_PATH, [])
-    # Garantizar compatibilidad con entradas anteriores sin proyecto/parte/orden
     updated = False
     for item in items:
         if "project_id" not in item:
@@ -140,6 +186,12 @@ def load_history():
         if "order_index" not in item:
             item["order_index"] = 1
             updated = True
+        # Auto-migrar duración para audios generados previamente
+        if ("duration" not in item or not item["duration"]) and item.get("status") == "success" and item.get("filename"):
+            dur = get_file_duration(item["filename"])
+            if dur > 0:
+                item["duration"] = dur
+                updated = True
     if updated:
         save_json(HISTORY_PATH, items)
     return items
@@ -164,8 +216,16 @@ def index():
 def get_config():
     cfg = load_config()
     safe = dict(cfg)
-    safe["has_api_key"] = bool(cfg.get("api_key"))
+    keys = [k for k in cfg.get("api_keys", []) if k]
+    safe["has_api_key"] = bool(keys or cfg.get("api_key"))
+    safe["api_keys_count"] = len(keys)
+    safe["max_concurrent_jobs"] = max(5, len(keys) * 5)
+    safe["api_keys_list"] = [
+        {"index": idx, "preview": f"{k[:6]}...{k[-4:]}" if len(k) > 12 else "fs_***"}
+        for idx, k in enumerate(keys)
+    ]
     safe.pop("api_key", None)
+    safe.pop("api_keys", None)
     return jsonify(safe)
 
 
@@ -175,7 +235,16 @@ def update_config():
     data = request.get_json(force=True) or {}
 
     if "api_key" in data and data["api_key"] is not None:
-        cfg["api_key"] = data["api_key"].strip()
+        key = data["api_key"].strip()
+        if key:
+            if key not in cfg["api_keys"]:
+                cfg["api_keys"].append(key)
+            cfg["api_key"] = key
+
+    if "api_keys" in data and isinstance(data["api_keys"], list):
+        cfg["api_keys"] = [k.strip() for k in data["api_keys"] if isinstance(k, str) and k.strip()]
+        cfg["api_key"] = cfg["api_keys"][0] if cfg["api_keys"] else ""
+
     if "default_model" in data and data["default_model"]:
         cfg["default_model"] = data["default_model"].strip()
     if "voices" in data and isinstance(data["voices"], list):
@@ -186,10 +255,32 @@ def update_config():
             cfg[field] = data[field]
 
     save_json(CONFIG_PATH, cfg)
-    safe = dict(cfg)
-    safe["has_api_key"] = bool(cfg.get("api_key"))
-    safe.pop("api_key", None)
-    return jsonify(safe)
+    return get_config()
+
+
+@app.route("/api/config/keys", methods=["POST"])
+def add_api_key():
+    cfg = load_config()
+    data = request.get_json(force=True) or {}
+    key = (data.get("api_key") or "").strip()
+    if not key:
+        return jsonify({"error": "La clave de API no puede estar vacía."}), 400
+    if key not in cfg["api_keys"]:
+        cfg["api_keys"].append(key)
+    cfg["api_key"] = cfg["api_keys"][0]
+    save_json(CONFIG_PATH, cfg)
+    return get_config()
+
+
+@app.route("/api/config/keys/<int:key_index>", methods=["DELETE"])
+def delete_api_key(key_index):
+    cfg = load_config()
+    if 0 <= key_index < len(cfg["api_keys"]):
+        removed = cfg["api_keys"].pop(key_index)
+        release_api_key(removed)
+        cfg["api_key"] = cfg["api_keys"][0] if cfg["api_keys"] else ""
+        save_json(CONFIG_PATH, cfg)
+    return get_config()
 
 
 @app.route("/api/voices", methods=["POST"])
@@ -462,7 +553,8 @@ def split_text_into_chunks(text: str, max_chars: int = 220) -> list:
 def generate():
     cfg = load_config()
     api_key = cfg.get("api_key")
-    if not api_key:
+    api_keys = [k for k in cfg.get("api_keys", []) if k]
+    if not api_key and not api_keys:
         return jsonify({"error": "Falta la clave de API. Agrégala en Ajustes."}), 400
 
     data = request.get_json(force=True) or {}
@@ -476,7 +568,8 @@ def generate():
     client_ip = request.remote_addr
     now = time.time()
     rate_limit_store[client_ip] = [t for t in rate_limit_store[client_ip] if now - t < RATE_LIMIT_WINDOW]
-    if len(rate_limit_store[client_ip]) >= RATE_LIMIT:
+    effective_rate_limit = max(15, len(api_keys) * 15)
+    if len(rate_limit_store[client_ip]) >= effective_rate_limit:
         logger.warning(f"Rate limit excedido para IP: {client_ip}")
         return jsonify({"error": "Demasiadas peticiones. Intenta de nuevo en un minuto."}), 429
     rate_limit_store[client_ip].append(now)
@@ -519,52 +612,79 @@ def generate():
     save_json(HISTORY_PATH, history)
 
     def perform_generation():
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "model": model,
-        }
+        failed_keys = set()
+        active_key = acquire_api_key(cfg, failed_keys) or api_key
+
         text_chunks = split_text_into_chunks(text, max_chars=220)
         audio_bytes_list = []
         audio_segments = []
         success = True
         error_msg = ""
 
-        for chunk in text_chunks:
-            if cancel_events[entry_id].is_set():
-                success = False
-                error_msg = "Cancelado por el usuario"
-                break
-            body = {
-                "text": chunk,
-                "format": audio_format,
-                "normalize": normalize,
-                "prosody": {"speed": speed, "volume": volume},
-            }
-            if reference_id:
-                body["reference_id"] = reference_id
-
-            try:
-                resp = requests.post(FISH_TTS_URL, headers=headers, json=body, timeout=120)
-                if not resp.ok:
+        try:
+            for chunk in text_chunks:
+                if cancel_events[entry_id].is_set():
                     success = False
-                    try:
-                        detail = resp.json()
-                        error_msg = detail.get("detail", resp.text)
-                    except ValueError:
-                        error_msg = resp.text
+                    error_msg = "Cancelado por el usuario"
                     break
-                audio_bytes_list.append(resp.content)
-                try:
-                    segment = AudioSegment.from_file(io.BytesIO(resp.content), format=audio_format)
-                    audio_segments.append(segment)
-                except Exception as e:
-                    logger.error(f"Error procesando chunk con pydub: {e}")
-            except Exception as exc:
-                success = False
-                error_msg = str(exc)
-                break
+                body = {
+                    "text": chunk,
+                    "format": audio_format,
+                    "normalize": normalize,
+                    "prosody": {"speed": speed, "volume": volume},
+                }
+                if reference_id:
+                    body["reference_id"] = reference_id
 
+                chunk_ok = False
+                max_attempts = max(1, len(api_keys))
+                for attempt in range(max_attempts):
+                    headers = {
+                        "Authorization": f"Bearer {active_key}",
+                        "Content-Type": "application/json",
+                        "model": model,
+                    }
+                    try:
+                        resp = requests.post(FISH_TTS_URL, headers=headers, json=body, timeout=120)
+                        if resp.status_code == 429 and len(api_keys) > 1:
+                            logger.warning(f"Clave {active_key[:6]}... alcanzó límite 429. Rotando a otra clave...")
+                            failed_keys.add(active_key)
+                            release_api_key(active_key)
+                            active_key = acquire_api_key(cfg, failed_keys)
+                            if not active_key:
+                                error_msg = "Límite de cuota excedido (429) en todas las claves de API."
+                                break
+                            continue
+
+                        if not resp.ok:
+                            success = False
+                            try:
+                                detail = resp.json()
+                                error_msg = detail.get("detail", resp.text)
+                            except ValueError:
+                                error_msg = resp.text
+                            break
+
+                        audio_bytes_list.append(resp.content)
+                        try:
+                            segment = AudioSegment.from_file(io.BytesIO(resp.content), format=audio_format)
+                            audio_segments.append(segment)
+                        except Exception as e:
+                            logger.error(f"Error procesando chunk con pydub: {e}")
+                        chunk_ok = True
+                        break
+                    except Exception as exc:
+                        success = False
+                        error_msg = str(exc)
+                        break
+
+                if not chunk_ok:
+                    success = False
+                    break
+        finally:
+            release_api_key(active_key)
+
+        calc_duration = 0.0
         if success:
             if len(audio_segments) == len(text_chunks) and len(audio_segments) > 0:
                 try:
@@ -574,6 +694,7 @@ def generate():
                     out_f = io.BytesIO()
                     final_segment.export(out_f, format=audio_format)
                     final_audio = out_f.getvalue()
+                    calc_duration = round(final_segment.duration_seconds, 1)
                 except Exception as e:
                     logger.error(f"Fallo export pydub. Concatenando en crudo. Error: {e}")
                     final_audio = b"".join(audio_bytes_list)
@@ -583,6 +704,8 @@ def generate():
             try:
                 with open(AUDIO_DIR / filename, "wb") as f:
                     f.write(final_audio)
+                if calc_duration <= 0:
+                    calc_duration = get_file_duration(filename)
             except Exception as e:
                 success = False
                 error_msg = f"No se pudo guardar el archivo final: {e}"
@@ -592,7 +715,9 @@ def generate():
         for idx, item in enumerate(hist):
             if item["id"] == entry_id:
                 hist[idx]["status"] = "success" if success else "failed"
-                if not success:
+                if success:
+                    hist[idx]["duration"] = calc_duration
+                else:
                     hist[idx]["error"] = error_msg
                 break
         save_json(HISTORY_PATH, hist)

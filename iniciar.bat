@@ -68,6 +68,11 @@ if %errorlevel% neq 0 (
     )
 )
 
+:: Liberar puerto 5050 si quedo algun proceso huerfano en segundo plano
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5050" ^| findstr "LISTENING"') do (
+    taskkill /f /pid %%a >nul 2>&1
+)
+
 echo.
 echo Servidor iniciando en: http://127.0.0.1:5050
 echo Abriendo navegador...
