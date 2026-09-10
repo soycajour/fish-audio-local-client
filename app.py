@@ -581,6 +581,7 @@ def generate():
 
     project_id = data.get("project_id") or cfg.get("active_project_id") or "default"
     part_id = data.get("part_id") or cfg.get("active_part_id") or "part-1"
+    source_file = (data.get("source_file") or "").strip()
 
     entry_id = uuid.uuid4().hex
     filename = f"{entry_id}.{audio_format}"
@@ -598,6 +599,7 @@ def generate():
         "model": model,
         "format": audio_format,
         "filename": filename,
+        "source_file": source_file,
         "timestamp": now,
         "status": "pending",
         "speed": speed,

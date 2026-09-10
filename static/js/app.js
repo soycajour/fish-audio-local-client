@@ -356,8 +356,12 @@ function openDetailsModal(entry) {
   const orderNum = entry.order_index || 1;
 
   els.detailOrderBadge.textContent = `#${orderNum}`;
-  els.detailHeaderTitle.textContent = `Detalles de la Toma — Toma #${orderNum}`;
-  els.detailScopeBreadcrumb.textContent = `${projName} / ${partName}`;
+  els.detailHeaderTitle.textContent = entry.source_file 
+    ? `Detalles de la Toma — Toma #${orderNum} (${entry.source_file})`
+    : `Detalles de la Toma — Toma #${orderNum}`;
+  els.detailScopeBreadcrumb.textContent = entry.source_file
+    ? `${projName} / ${partName} · 📄 ${entry.source_file}`
+    : `${projName} / ${partName}`;
   els.detailFormatBadge.textContent = `${(entry.format || 'mp3').toUpperCase()} (44.1 kHz)`;
 
   const voice = state.voices.find(v => v.reference_id === entry.reference_id);
@@ -445,8 +449,10 @@ function openDetailsModal(entry) {
     setTimeout(() => { if (span) span.textContent = 'Copiar texto'; }, 2000);
   };
 
+  const baseName = entry.source_file ? entry.source_file.replace(/\.[^/.]+$/, "") : (entry.order_index ? `toma_${entry.order_index}` : entry.id);
+  const downloadName = `${baseName}.${entry.format || 'mp3'}`;
   els.detailDownloadBtn.href = audioUrl;
-  els.detailDownloadBtn.download = entry.filename;
+  els.detailDownloadBtn.download = downloadName;
 
   els.detailDeleteBtn.onclick = () => {
     closeDetailsModal();
@@ -846,7 +852,7 @@ els.batchImportConfirmBtn.addEventListener('click', async () => {
         const content = file.content ? file.content.trim() : '';
         if (!content) continue;
         try {
-          await dispatchTtsJob(content);
+          await dispatchTtsJob(content, file.name);
         } catch (err) {
           console.error(`Error procesando archivo ${file.name}:`, err);
         }
@@ -1395,7 +1401,7 @@ function setupAutoSave() {
   });
 }
 
-async function dispatchTtsJob(text) {
+async function dispatchTtsJob(text, sourceFile = '') {
   const payload = {
     text,
     reference_id: els.voiceSelect.value,
@@ -1405,6 +1411,7 @@ async function dispatchTtsJob(text) {
     normalize: els.normalizeToggle.checked,
     project_id: state.activeProjectId,
     part_id: state.activePartId,
+    source_file: sourceFile || '',
   };
 
   activeJobsCount++;
@@ -1543,8 +1550,9 @@ function renderAudioCard(entry) {
       <div class="flex items-center space-x-3.5 min-w-0">
         <span class="flex items-center justify-center w-8 h-8 rounded-xl bg-surface-input border border-surface-border text-xs font-mono font-bold text-brand-400 shrink-0 shadow-inner-subtle">#${orderNum}</span>
         <div class="min-w-0">
-          <div class="flex items-center space-x-2.5">
+          <div class="flex items-center space-x-2.5 flex-wrap">
             <span class="text-xs font-bold text-white truncate">${escapeHtml(voiceName)}</span>
+            ${entry.source_file ? `<span class="inline-flex items-center gap-1 text-[10px] font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-md truncate max-w-[180px]" title="Archivo de texto origen: ${escapeHtml(entry.source_file)}">📄 ${escapeHtml(entry.source_file)}</span>` : ''}
             <span class="text-[11px] text-slate-500 font-mono shrink-0">${timeStr} · ${formatStr}</span>
           </div>
           <p class="text-xs text-slate-400 line-clamp-1 mt-0.5 leading-relaxed">${escapeHtml(entry.text)}</p>
@@ -1635,7 +1643,8 @@ function renderAudioCard(entry) {
     e.stopPropagation();
     const a = document.createElement('a');
     a.href = audioUrl;
-    a.download = entry.filename;
+    const cardBaseName = entry.source_file ? entry.source_file.replace(/\.[^/.]+$/, "") : (entry.order_index ? `toma_${entry.order_index}` : entry.id);
+    a.download = `${cardBaseName}.${entry.format || 'mp3'}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1803,16 +1812,19 @@ async function loadHistory() {
     const part = proj && proj.parts ? proj.parts.find(p => p.id === (item.part_id || 'part-1')) : null;
     const partName = part ? part.name : 'Parte 1';
 
+    const histBaseName = item.source_file ? item.source_file.replace(/\.[^/.]+$/, "") : (item.order_index ? `toma_${item.order_index}` : item.id);
+    const histDownloadName = `${histBaseName}.${item.format || 'mp3'}`;
+
     div.innerHTML = `
       <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
         <span class="text-brand-400 font-bold">#${item.order_index || activeHistory.length - idx}</span>
-        <span class="truncate max-w-[170px]">${escapeHtml(projName)} (${escapeHtml(partName)})</span>
+        <span class="truncate max-w-[170px]" title="${escapeHtml(item.source_file || projName)}">${item.source_file ? `📄 ${escapeHtml(item.source_file)}` : `${escapeHtml(projName)} (${escapeHtml(partName)})`}</span>
         <span>${item.duration ? fmtDetailedTime(item.duration) + ' · ' : ''}${timeLabel}</span>
       </div>
       <div class="text-xs text-slate-300 line-clamp-2 leading-relaxed">${escapeHtml(item.text)}</div>
       <div class="flex items-center justify-end space-x-2 pt-2 border-t border-surface-border/50">
         <button class="play-hist-btn text-xs text-slate-200 hover:text-white px-2.5 py-1 rounded-lg bg-surface-input border border-surface-borderLight/30 transition-colors">▶ Escuchar</button>
-        <a href="/static/audio/${item.filename}" download="${item.filename}" class="text-xs text-slate-200 hover:text-white px-2.5 py-1 rounded-lg bg-surface-input border border-surface-borderLight/30 transition-colors">⬇ Descargar</a>
+        <a href="/static/audio/${item.filename}" download="${histDownloadName}" class="text-xs text-slate-200 hover:text-white px-2.5 py-1 rounded-lg bg-surface-input border border-surface-borderLight/30 transition-colors">⬇ Descargar</a>
         <button class="delete-btn text-xs text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-surface-input border border-surface-borderLight/30 transition-colors">🗑 Papelera</button>
       </div>`;
 
